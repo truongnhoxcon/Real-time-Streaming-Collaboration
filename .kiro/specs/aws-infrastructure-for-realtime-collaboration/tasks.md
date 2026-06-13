@@ -8,8 +8,8 @@ Stack: Terraform + ECS Fargate + RDS PostgreSQL + ElastiCache Redis + ALB + S3 +
 
 ## Tasks
 
-- [ ] 1. Terraform Foundation - Backend State và Provider Configuration
-  - [ ] 1.1 Khởi tạo cấu trúc thư mục Terraform và cấu hình backend S3
+- [x] 1. Terraform Foundation - Backend State và Provider Configuration
+  - [x] 1.1 Khởi tạo cấu trúc thư mục Terraform và cấu hình backend S3
     - Tạo thư mục `terraform/` với cấu trúc: `main.tf`, `variables.tf`, `outputs.tf`, `backend.tf`, `terraform.tfvars.example`
     - Tạo thư mục `terraform/modules/` với các subfolder: `vpc/`, `ecs/`, `alb/`, `rds/`, `elasticache/`, `s3/`, `iam/`, `security-groups/`, `secrets/`
     - Tạo thư mục `terraform/environments/` với files: `dev.tfvars`, `staging.tfvars`, `prod.tfvars`
@@ -23,8 +23,8 @@ Stack: Terraform + ECS Fargate + RDS PostgreSQL + ElastiCache Redis + ALB + S3 +
     - Tạo `infra/scripts/validate-terraform.sh`: chạy `terraform fmt -check -recursive` và `terraform validate`
     - _Requirements: 19.1_
 
-- [ ] 2. Networking - VPC, Subnets, Internet Gateway, NAT Gateway, Route Tables
-  - [ ] 2.1 Tạo Terraform module VPC với subnets và internet connectivity
+- [x] 2. Networking - VPC, Subnets, Internet Gateway, NAT Gateway, Route Tables
+  - [x] 2.1 Tạo Terraform module VPC với subnets và internet connectivity
     - Viết `terraform/modules/vpc/main.tf`: tạo `aws_vpc` với CIDR `10.0.0.0/16`, DNS hostnames và DNS resolution enabled
     - Tạo 2 `aws_subnet` public (10.0.1.0/24 tại us-east-1a, 10.0.2.0/24 tại us-east-1b) với `map_public_ip_on_launch = true`
     - Tạo 2 `aws_subnet` private (10.0.10.0/24 tại us-east-1a, 10.0.11.0/24 tại us-east-1b)
@@ -36,8 +36,8 @@ Stack: Terraform + ECS Fargate + RDS PostgreSQL + ElastiCache Redis + ALB + S3 +
     - Enable VPC Flow Logs (`aws_flow_log`) với destination CloudWatch Logs
     - _Requirements: 2.1, 2.2, 2.3, 2.4, 2.5, 2.6, 2.7, 16.6_
 
-- [ ] 3. Security Groups
-  - [ ] 3.1 Tạo Terraform module security-groups cho tất cả services
+- [x] 3. Security Groups
+  - [x] 3.1 Tạo Terraform module security-groups cho tất cả services
     - Viết `terraform/modules/security-groups/main.tf`
     - Tạo `aws_security_group` **alb-sg**: inbound 443 từ `0.0.0.0/0`, inbound 80 từ `0.0.0.0/0`; outbound port 3000 đến core-backend-sg, port 4000 đến realtime-backend-sg
     - Tạo `aws_security_group` **core-backend-sg**: inbound port 3000 từ alb-sg; outbound port 5432 đến rds-sg, port 6379 đến redis-sg, port 443 ra internet (HTTPS cho AWS APIs và Twilio)
@@ -47,8 +47,8 @@ Stack: Terraform + ECS Fargate + RDS PostgreSQL + ElastiCache Redis + ALB + S3 +
     - Viết `variables.tf` (nhận vpc_id) và `outputs.tf` (export tất cả security group IDs)
     - _Requirements: 2.8, 2.9, 2.10, 16.4, 16.5_
 
-- [ ] 4. IAM Roles và Policies
-  - [ ] 4.1 Tạo Terraform module IAM cho ECS Task Execution Role và ECS Task Role
+- [x] 4. IAM Roles và Policies
+  - [x] 4.1 Tạo Terraform module IAM cho ECS Task Execution Role và ECS Task Role
     - Viết `terraform/modules/iam/main.tf`
     - Tạo `aws_iam_role` **ecsTaskExecutionRole** với trust policy cho `ecs-tasks.amazonaws.com`
     - Attach policy cho ecsTaskExecutionRole: ECR pull permissions (`ecr:GetAuthorizationToken`, `ecr:BatchCheckLayerAvailability`, `ecr:GetDownloadUrlForLayer`, `ecr:BatchGetImage`), CloudWatch Logs (`logs:CreateLogStream`, `logs:PutLogEvents` scoped tới `/ecs/*`), Secrets Manager GetSecretValue scoped tới ARNs của db-password, jwt-secret, twilio/api-credentials, redis-auth-token
@@ -57,8 +57,8 @@ Stack: Terraform + ECS Fargate + RDS PostgreSQL + ElastiCache Redis + ALB + S3 +
     - Viết `variables.tf` (nhận s3_bucket_arn, secret ARNs) và `outputs.tf` (export role ARNs)
     - _Requirements: 12.6, 12.7, 12.8, 16.5_
 
-- [ ] 5. Secrets Manager
-  - [ ] 5.1 Tạo Terraform module secrets cho AWS Secrets Manager
+- [x] 5. Secrets Manager
+  - [x] 5.1 Tạo Terraform module secrets cho AWS Secrets Manager
     - Viết `terraform/modules/secrets/main.tf`
     - Tạo `aws_secretsmanager_secret` **db-password** với description và recovery_window_in_days = 7; tạo `aws_secretsmanager_secret_version` với placeholder JSON `{"username":"postgres","password":"CHANGE_ME"}`
     - Tạo `aws_secretsmanager_secret` **jwt-secret** với placeholder `{"secret":"CHANGE_ME"}`
@@ -68,8 +68,8 @@ Stack: Terraform + ECS Fargate + RDS PostgreSQL + ElastiCache Redis + ALB + S3 +
     - Viết `outputs.tf` (export tất cả secret ARNs và names)
     - _Requirements: 8.7, 16.7, 16.8, 16.9_
 
-- [ ] 6. Amazon ECR - Container Registries
-  - [ ] 6.1 Tạo ECR repositories cho core-backend và realtime-backend
+- [x] 6. Amazon ECR - Container Registries
+  - [x] 6.1 Tạo ECR repositories cho core-backend và realtime-backend
     - Viết `terraform/modules/ecs/ecr.tf` (hoặc thêm vào module ecs)
     - Tạo `aws_ecr_repository` **core-backend** với `image_tag_mutability = "MUTABLE"` và `scan_on_push = true`
     - Tạo `aws_ecr_repository` **realtime-backend** với `image_tag_mutability = "MUTABLE"` và `scan_on_push = true`
@@ -77,8 +77,8 @@ Stack: Terraform + ECS Fargate + RDS PostgreSQL + ElastiCache Redis + ALB + S3 +
     - Output ECR repository URLs để dùng trong GitHub Actions và ECS task definitions
     - _Requirements: 18.3_
 
-- [ ] 7. RDS PostgreSQL
-  - [ ] 7.1 Tạo Terraform module RDS PostgreSQL Single-AZ
+- [x] 7. RDS PostgreSQL
+  - [x] 7.1 Tạo Terraform module RDS PostgreSQL Single-AZ
     - Viết `terraform/modules/rds/main.tf`
     - Tạo `aws_db_subnet_group` sử dụng private subnet IDs
     - Tạo `aws_db_instance` với: engine `postgres`, engine_version `15`, instance_class `db.t3.medium`, allocated_storage 100, storage_type `gp3`, storage_encrypted = true, db_name `realtime_collab`, username `postgres`
