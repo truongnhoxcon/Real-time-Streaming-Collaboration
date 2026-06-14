@@ -90,8 +90,8 @@ Stack: Terraform + ECS Fargate + RDS PostgreSQL + ElastiCache Redis + ALB + S3 +
     - Viết `variables.tf` và `outputs.tf` (output: db_endpoint, db_port, db_name)
     - _Requirements: 5.1, 5.2, 5.3, 5.4, 5.5, 5.6, 5.7, 14.1, 14.2_
 
-- [ ] 8. ElastiCache Redis
-  - [ ] 8.1 Tạo Terraform module ElastiCache Redis Single-AZ
+- [x] 8. ElastiCache Redis
+  - [x] 8.1 Tạo Terraform module ElastiCache Redis Single-AZ
     - Viết `terraform/modules/elasticache/main.tf`
     - Tạo `aws_elasticache_subnet_group` sử dụng private subnet IDs
     - Tạo `aws_elasticache_replication_group` với: engine `redis`, engine_version `7.x`, node_type `cache.t3.medium`, num_cache_clusters = 1 (Single-AZ, no replicas)
@@ -102,8 +102,8 @@ Stack: Terraform + ECS Fargate + RDS PostgreSQL + ElastiCache Redis + ALB + S3 +
     - Viết `variables.tf` và `outputs.tf` (output: redis_endpoint, redis_port)
     - _Requirements: 4.1, 4.2, 4.5, 4.6, 4.7_
 
-- [ ] 9. S3 Buckets
-  - [ ] 9.1 Tạo Terraform module S3 cho file storage và logs bucket
+- [x] 9. S3 Buckets
+  - [x] 9.1 Tạo Terraform module S3 cho file storage và logs bucket
     - Viết `terraform/modules/s3/main.tf`
     - Tạo `aws_s3_bucket` **realtime-collab-files-{account-id}**: versioning enabled, server-side encryption SSE-S3 (AES256)
     - Tạo `aws_s3_bucket_public_access_block` cho file bucket: tất cả block_public settings = true
@@ -115,8 +115,8 @@ Stack: Terraform + ECS Fargate + RDS PostgreSQL + ElastiCache Redis + ALB + S3 +
     - Viết `variables.tf` (app_domain, account_id) và `outputs.tf` (bucket name, bucket ARN)
     - _Requirements: 6.1, 6.2, 6.5, 6.6, 6.7, 6.8, 13.8_
 
-- [ ] 10. Application Load Balancer
-  - [ ] 10.1 Tạo Terraform module ALB với listeners, target groups và routing rules
+- [x] 10. Application Load Balancer
+  - [x] 10.1 Tạo Terraform module ALB với listeners, target groups và routing rules
     - Viết `terraform/modules/alb/main.tf`
     - Tạo `aws_lb` internet-facing, ip address type ipv4, subnets = public_subnet_ids, security_groups = [alb-sg]; enable access_logs → alb-logs bucket; idle_timeout = 3600 giây (hỗ trợ WebSocket), enable_deletion_protection = true
     - Tạo `aws_lb_target_group` **core-backend-tg**: protocol HTTP, port 3000, target_type ip, health_check path `/health` interval 15s timeout 5s healthy_threshold 2 unhealthy_threshold 2, deregistration_delay = 30
@@ -128,8 +128,8 @@ Stack: Terraform + ECS Fargate + RDS PostgreSQL + ElastiCache Redis + ALB + S3 +
     - Viết `variables.tf` (vpc_id, public_subnet_ids, alb_sg_id, domain_name) và `outputs.tf` (alb_arn, alb_dns_name, target group ARNs, listener ARNs)
     - _Requirements: 3.1, 3.2, 3.3, 3.4, 3.5, 3.6, 3.7, 3.8, 3.9, 16.3_
 
-- [ ] 11. ECS Cluster và Services
-  - [ ] 11.1 Tạo ECS Cluster và task definitions
+- [x] 11. ECS Cluster và Services
+  - [x] 11.1 Tạo ECS Cluster và task definitions
     - Viết `terraform/modules/ecs/cluster.tf`
     - Tạo `aws_ecs_cluster` với tên `realtime-collab-cluster`, enable Container Insights
     - Tạo `aws_ecs_cluster_capacity_providers`: FARGATE và FARGATE_SPOT
@@ -138,7 +138,7 @@ Stack: Terraform + ECS Fargate + RDS PostgreSQL + ElastiCache Redis + ALB + S3 +
     - Tạo `aws_ecs_task_definition` **realtime-backend-task**: networkMode awsvpc, CPU 1024, memory 2048, requiresCompatibilities FARGATE; container definition với image từ ECR, port 4000, environment variables, secrets tương tự, health check port 4000, logConfiguration awslogs `/ecs/realtime-backend`
     - _Requirements: 1.1, 1.2, 1.5, 13.1, 13.2_
 
-  - [ ] 11.2 Tạo ECS Services với auto-scaling
+  - [x] 11.2 Tạo ECS Services với auto-scaling
     - Viết `terraform/modules/ecs/services.tf`
     - Tạo `aws_ecs_service` **core-backend-service**: cluster, task_definition, desired_count = 2, launch_type FARGATE; network_configuration với private_subnets và core-backend-sg; load_balancer config → core-backend-tg container_port 3000; deployment_minimum_healthy_percent = 100, deployment_maximum_percent = 200; enable_ecs_managed_tags = true
     - Tạo `aws_ecs_service` **realtime-backend-service**: tương tự, desired_count = 2, subnets private, realtime-backend-sg, → realtime-backend-tg container_port 4000
@@ -147,8 +147,8 @@ Stack: Terraform + ECS Fargate + RDS PostgreSQL + ElastiCache Redis + ALB + S3 +
     - Tạo `aws_appautoscaling_policy` **realtime-backend**: TargetTrackingScaling, ECSServiceAverageCPUUtilization target_value 60, scale_out_cooldown 60, scale_in_cooldown 300, max_capacity 20
     - _Requirements: 1.3, 1.4, 1.6, 1.7, 15.1, 15.2, 15.3, 15.4, 15.5, 15.6_
 
-- [ ] 12. CloudWatch Monitoring - Log Groups, Dashboards, Alarms, SNS
-  - [ ] 12.1 Tạo CloudWatch log groups, SNS topic và alarms
+- [x] 12. CloudWatch Monitoring - Log Groups, Dashboards, Alarms, SNS
+  - [x] 12.1 Tạo CloudWatch log groups, SNS topic và alarms
     - Viết `terraform/modules/ecs/monitoring.tf` (hoặc tạo module riêng `cloudwatch/`)
     - Tạo `aws_cloudwatch_log_group` **/ecs/core-backend**: retention_in_days = 30
     - Tạo `aws_cloudwatch_log_group` **/ecs/realtime-backend**: retention_in_days = 30
@@ -169,8 +169,8 @@ Stack: Terraform + ECS Fargate + RDS PostgreSQL + ElastiCache Redis + ALB + S3 +
     - Tạo `aws_cloudwatch_dashboard` **RealTime-Collaboration-Overview** với widgets cho ECS metrics, ALB metrics, RDS metrics, Redis metrics
     - _Requirements: 13.1, 13.2, 13.3, 13.4, 13.5, 13.6, 13.7, 13.9_
 
-- [ ] 13. Wiring tất cả modules trong root main.tf
-  - [ ] 13.1 Kết nối tất cả Terraform modules trong root configuration
+- [x] 13. Wiring tất cả modules trong root main.tf
+  - [x] 13.1 Kết nối tất cả Terraform modules trong root configuration
     - Cập nhật `terraform/main.tf` root để gọi tất cả modules theo thứ tự dependency:
       1. Module `secrets` (không có dependency)
       2. Module `vpc` (không có dependency)

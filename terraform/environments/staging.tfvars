@@ -6,8 +6,8 @@ aws_region   = "us-east-1"
 environment  = "staging"
 project_name = "realtime-collab"
 
-# account_id must be set per deployment.
-# account_id = "123456789012"
+# Set your actual AWS account ID before running terraform apply
+account_id = "123456789012"
 
 # Networking – staging uses 10.2.0.0/16
 vpc_cidr = "10.2.0.0/16"
