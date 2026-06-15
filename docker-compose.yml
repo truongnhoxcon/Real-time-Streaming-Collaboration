@@ -1,0 +1,122 @@
+version: '3.8'
+
+services:
+  # ---------------------------------------------------------------------------
+  # Database Service (PostgreSQL)
+  # ---------------------------------------------------------------------------
+  postgres:
+    image: postgres:15-alpine
+    container_name: realtime_postgres
+    restart: always
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: realtime_collab
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    networks:
+      - realtime-network
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d realtime_collab"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  # ---------------------------------------------------------------------------
+  # Cache & Pub/Sub Service (Redis)
+  # ---------------------------------------------------------------------------
+  redis:
+    image: redis:7-alpine
+    container_name: realtime_redis
+    restart: always
+    ports:
+      - "6379:6379"
+    networks:
+      - realtime-network
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  # ---------------------------------------------------------------------------
+  # Core Backend Service (REST API)
+  # ---------------------------------------------------------------------------
+  backend-core:
+    build:
+      context: ./apps/backend-core
+      dockerfile: Dockerfile
+    container_name: realtime_backend_core
+    restart: always
+    ports:
+      - "3000:3000"
+    environment:
+      - PORT=3000
+      - NODE_ENV=production
+      # DB Connection (connecting to the postgres service hostname inside the bridge network)
+      - DB_HOST=postgres
+      - DB_PORT=5432
+      - DB_USER=postgres
+      - DB_PASSWORD=postgres
+      - DB_NAME=realtime_collab
+      # Security Credentials
+      - JWT_SECRET=default_jwt_secret_change_me_in_production
+      # Mock credentials for local standalone execution of S3 & Twilio APIs
+      - AWS_REGION=us-east-1
+      - S3_BUCKET_NAME=realtime-collab-files-default
+      - TWILIO_ACCOUNT_SID=AC00000000000000000000000000000000
+      - TWILIO_AUTH_TOKEN=00000000000000000000000000000000
+    depends_on:
+      postgres:
+        condition: service_healthy
+    networks:
+      - realtime-network
+
+  # ---------------------------------------------------------------------------
+  # Real-time Backend Service (WebSocket Engine)
+  # ---------------------------------------------------------------------------
+  backend-realtime:
+    build:
+      context: ./apps/backend-realtime
+      dockerfile: Dockerfile
+    container_name: realtime_backend_engine
+    restart: always
+    ports:
+      - "4000:4000"
+    environment:
+      - PORT=4000
+      - NODE_ENV=production
+      # DB Connection
+      - DB_HOST=postgres
+      - DB_PORT=5432
+      - DB_USER=postgres
+      - DB_PASSWORD=postgres
+      - DB_NAME=realtime_collab
+      # Redis Connection (connecting to the redis service hostname inside the bridge network)
+      - REDIS_HOST=redis
+      - REDIS_PORT=6379
+      - REDIS_URL=redis://redis:6379
+      # Security Credentials
+      - JWT_SECRET=default_jwt_secret_change_me_in_production
+      - TWILIO_ACCOUNT_SID=AC00000000000000000000000000000000
+      - TWILIO_AUTH_TOKEN=00000000000000000000000000000000
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    networks:
+      - realtime-network
+
+# -----------------------------------------------------------------------------
+# Networks and Persistent Volumes Definitions
+# -----------------------------------------------------------------------------
+networks:
+  realtime-network:
+    driver: bridge
+
+volumes:
+  postgres_data:
+    driver: local
