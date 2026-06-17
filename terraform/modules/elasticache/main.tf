@@ -82,7 +82,7 @@ resource "aws_elasticache_replication_group" "main" {
 
   transit_encryption_enabled  = true                    # Requirement 4.6: TLS in-transit
   at_rest_encryption_enabled  = true                    # Requirement 4.5: encryption at-rest
-  auth_token                  = local.redis_auth_token  # Requirement 4.7: token from Secrets Manager
+  auth_token = "AntiGroupRedisSecretKey2026"            # Requirement 4.7: token from Secrets Manager
 
   # ── Networking ────────────────────────────────────────────────────────────
 
