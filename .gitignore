@@ -1,4 +1,3 @@
-<<<<<<< HEAD
 # -----------------------------------------------------------------------------
 # Node.js / Javascript
 # -----------------------------------------------------------------------------
@@ -74,7 +73,5 @@ desktop.ini
 .project
 .classpath
 .settings/
-=======
 node_modules/
 apps/frontend/node_modules/
->>>>>>> c9f0f9765422f593af69dcec72fb460bb7ed9e07

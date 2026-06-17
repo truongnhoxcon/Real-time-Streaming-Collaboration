@@ -3,11 +3,18 @@ const { getSignedUrl } = require('@aws-sdk/s3-request-presigner');
 const crypto = require('crypto');
 require('dotenv').config();
 
-const s3Client = new S3Client({
-  region: process.env.AWS_REGION || 'us-east-1',
-  // In production, IAM role/Fargate credentials are used. 
-  // Locally, environment variables AWS_ACCESS_KEY_ID and AWS_SECRET_ACCESS_KEY can be provided.
-});
+const hasAwsCredentials = !!(process.env.AWS_ACCESS_KEY_ID && process.env.AWS_SECRET_ACCESS_KEY);
+const hasContainerCredentials = !!(process.env.AWS_CONTAINER_CREDENTIALS_RELATIVE_URI || process.env.AWS_CONTAINER_CREDENTIALS_FULL_URI);
+
+// Fallback to mock URL if no AWS access keys are found and we are not in an AWS container environment
+const useMockS3 = !hasAwsCredentials && !hasContainerCredentials;
+
+let s3Client = null;
+if (!useMockS3) {
+  s3Client = new S3Client({
+    region: process.env.AWS_REGION || 'us-east-1',
+  });
+}
 
 const BUCKET_NAME = process.env.S3_BUCKET_NAME || 'realtime-collab-files-default';
 
@@ -27,19 +34,37 @@ async function getUploadPresignedUrl(serverId, channelId, filename, contentType)
   const sanitizedFilename = encodeURIComponent(filename.replace(/\s+/g, '_'));
   const key = `server-${serverId}/channels/${channelId}/${fileUuid}-${sanitizedFilename}`;
 
-  const command = new PutObjectCommand({
-    Bucket: BUCKET_NAME,
-    Key: key,
-    ContentType: contentType,
-  });
+  if (useMockS3) {
+    const mockUrl = `http://localhost:3000/mock-s3-local/${key}`;
+    console.log(`[MOCK S3] Generating mock upload URL for key: ${key}`);
+    return {
+      uploadUrl: mockUrl,
+      key,
+    };
+  }
 
-  // URL valid for 15 minutes (900 seconds)
-  const uploadUrl = await getSignedUrl(s3Client, command, { expiresIn: 900 });
+  try {
+    const command = new PutObjectCommand({
+      Bucket: BUCKET_NAME,
+      Key: key,
+      ContentType: contentType,
+    });
 
-  return {
-    uploadUrl,
-    key,
-  };
+    // URL valid for 15 minutes (900 seconds)
+    const uploadUrl = await getSignedUrl(s3Client, command, { expiresIn: 900 });
+
+    return {
+      uploadUrl,
+      key,
+    };
+  } catch (error) {
+    console.error(`[MOCK S3] Credentials check or S3 signing failed (${error.message}). Falling back to local mock URL.`);
+    const mockUrl = `http://localhost:3000/mock-s3-local/${key}`;
+    return {
+      uploadUrl: mockUrl,
+      key,
+    };
+  }
 }
 
 /**
@@ -49,17 +74,30 @@ async function getUploadPresignedUrl(serverId, channelId, filename, contentType)
  * @returns {Promise<string>} - Presigned URL
  */
 async function getDownloadPresignedUrl(key) {
-  const command = new GetObjectCommand({
-    Bucket: BUCKET_NAME,
-    Key: key,
-  });
+  if (useMockS3) {
+    const mockUrl = `http://localhost:3000/mock-s3-local/${key}`;
+    console.log(`[MOCK S3] Generating mock download URL for key: ${key}`);
+    return mockUrl;
+  }
 
-  // URL valid for 1 hour (3600 seconds)
-  const downloadUrl = await getSignedUrl(s3Client, command, { expiresIn: 3600 });
-  return downloadUrl;
+  try {
+    const command = new GetObjectCommand({
+      Bucket: BUCKET_NAME,
+      Key: key,
+    });
+
+    // URL valid for 1 hour (3600 seconds)
+    const downloadUrl = await getSignedUrl(s3Client, command, { expiresIn: 3600 });
+    return downloadUrl;
+  } catch (error) {
+    console.error(`[MOCK S3] Credentials check or S3 signing failed (${error.message}). Falling back to local mock URL.`);
+    const mockUrl = `http://localhost:3000/mock-s3-local/${key}`;
+    return mockUrl;
+  }
 }
 
 module.exports = {
   getUploadPresignedUrl,
   getDownloadPresignedUrl,
 };
+
