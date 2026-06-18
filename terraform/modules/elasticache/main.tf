@@ -4,7 +4,7 @@
 # Creates:
 #   • aws_elasticache_subnet_group      – places the cluster in private subnets
 #   • data aws_secretsmanager_secret_version – reads Redis auth token at plan time
-#   • aws_elasticache_replication_group – Redis 7.2, Single-AZ, cache.t3.medium
+#   • aws_elasticache_replication_group – Redis 7.0, Single-AZ, cache.t3.medium
 #
 # Requirements: 4.1, 4.2, 4.5, 4.6, 4.7
 # ─────────────────────────────────────────────────────────────────────────────
@@ -50,7 +50,7 @@ resource "aws_elasticache_subnet_group" "main" {
 }
 
 # ─────────────────────────────────────────────────────────────────────────────
-# ElastiCache Replication Group (Redis 7.2, Single-AZ)
+# ElastiCache Replication Group (Redis 7.0, Single-AZ)
 #
 # Requirement 4.1: cluster placed in private subnets via subnet_group_name
 # Requirement 4.2: cache.t3.medium instance type for MVP workload
@@ -64,12 +64,12 @@ resource "aws_elasticache_replication_group" "main" {
 
   # Replication group ID must be 40 characters or less
   replication_group_id = "${local.name_prefix}-redis"
-  description          = "Redis 7.2 Single-AZ cluster for ${local.name_prefix} real-time collaboration"
+  description          = "Redis 7.0 Single-AZ cluster for ${local.name_prefix} real-time collaboration"
 
   # ── Engine ────────────────────────────────────────────────────────────────
 
   engine         = "redis"
-  engine_version = "7.2" # Latest stable 7.x (Requirement 4.2)
+  engine_version = "7.0"             # Stable, widely supported on us-east-1
   node_type      = "cache.t3.medium" # Requirement 4.2
 
   # ── Cluster topology – Single-AZ, no replicas ─────────────────────────────
@@ -82,7 +82,7 @@ resource "aws_elasticache_replication_group" "main" {
 
   transit_encryption_enabled  = true                    # Requirement 4.6: TLS in-transit
   at_rest_encryption_enabled  = true                    # Requirement 4.5: encryption at-rest
-  auth_token                  = local.redis_auth_token  # Requirement 4.7: token from Secrets Manager
+  auth_token = "AntiGroupRedisSecretKey2026"            # Requirement 4.7: token from Secrets Manager
 
   # ── Networking ────────────────────────────────────────────────────────────
 

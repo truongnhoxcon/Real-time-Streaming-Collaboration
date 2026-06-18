@@ -117,7 +117,25 @@ resource "aws_secretsmanager_secret_version" "twilio_credentials" {
 
 # ─────────────────────────────────────────────────────────────────────────────
 # 4. redis-auth-token – ElastiCache Redis AUTH token
+#
+# AWS ElastiCache auth_token constraints:
+#   • 16–128 characters
+#   • Alphanumeric + allowed symbols
+#   • Must NOT contain @, ", or /
+#
+# A random_password resource generates a compliant token on first apply.
+# override_special excludes the three forbidden characters while keeping
+# the password strong. The token is stored in Secrets Manager so the
+# ElastiCache module can read it at plan/apply time.
 # ─────────────────────────────────────────────────────────────────────────────
+
+resource "random_password" "redis_auth_token" {
+  length  = 32
+  special = true
+
+  # Exclude the three characters forbidden by AWS ElastiCache:  @  "  /
+  override_special = "!#$%&*()-_=+[]{}<>:?"
+}
 
 resource "aws_secretsmanager_secret" "redis_auth_token" {
   name        = "${local.name_prefix}/redis-auth-token"
@@ -134,10 +152,13 @@ resource "aws_secretsmanager_secret" "redis_auth_token" {
 resource "aws_secretsmanager_secret_version" "redis_auth_token" {
   secret_id = aws_secretsmanager_secret.redis_auth_token.id
 
+  # Store the generated token as JSON so the elasticache module can decode it
+  # with: jsondecode(...)["token"]
   secret_string = jsonencode({
-    token = "CHANGE_ME"
+    token = random_password.redis_auth_token.result
   })
 
+  # Once set, do not overwrite if the secret is rotated manually outside Terraform
   lifecycle {
     ignore_changes = [secret_string]
   }
