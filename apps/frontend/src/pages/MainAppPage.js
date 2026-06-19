@@ -1,6 +1,7 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { useAuth } from '../context/AuthContext.js';
 import { useChat } from '../context/ChatContext.js';
+import useWebRTC from '../hooks/useWebRTC.js';
 import logo2 from '../assets/AntiGR Logo 02.png';
 import api from '../services/api.js';
 import {
@@ -28,6 +29,8 @@ import {
   X,
   ChevronRight,
   Camera,
+  Video,
+  VideoOff,
   ImagePlus,
   User,
   Gamepad2,
@@ -108,13 +111,25 @@ export default function MainAppPage() {
     sendMessage,
     createServer,
     createChannel,
-    fetchServers
+    fetchServers,
+    socket
   } = useChat();
 
   // Navigation / Collapse states
   const [collapseText, setCollapseText] = useState(false);
   const [collapseVoice, setCollapseVoice] = useState(false);
   const [connectedVoiceId, setConnectedVoiceId] = useState(null);
+
+  const {
+    localStream,
+    remoteStreams,
+    peersInfo,
+    isMuted: isWebRTCMuted,
+    isCameraOff: isWebRTCCameraOff,
+    toggleMic: toggleWebRTCMic,
+    toggleCamera: toggleWebRTCCamera,
+    leaveChannel: leaveWebRTCChannel
+  } = useWebRTC(socket, connectedVoiceId);
   const [showMembersList, setShowMembersList] = useState(true);
 
   // User peripheral states
@@ -412,9 +427,15 @@ export default function MainAppPage() {
 
   const handleVoiceChannelClick = (channelId) => {
     if (connectedVoiceId === channelId) {
+      leaveWebRTCChannel();
       setConnectedVoiceId(null);
     } else {
+      if (connectedVoiceId) {
+        leaveWebRTCChannel();
+      }
       setConnectedVoiceId(channelId);
+      // Auto select the voice channel when clicking it
+      setActiveChannelId(channelId);
     }
   };
 
@@ -831,7 +852,10 @@ export default function MainAppPage() {
                     {channels.find(c => c.id === connectedVoiceId)?.name} / {activeServer.name}
                   </span>
                   <button
-                    onClick={() => setConnectedVoiceId(null)}
+                    onClick={() => {
+                      leaveWebRTCChannel();
+                      setConnectedVoiceId(null);
+                    }}
                     className="text-gray-400 hover:text-red-500 hover:bg-gray-800 p-1 rounded transition"
                   >
                     <LogOut className="w-3.5 h-3.5" />
@@ -967,121 +991,253 @@ export default function MainAppPage() {
 
       {/* 3. CENTER PANEL (CHAT OR FRIENDS) */}
       {activeServerId ? (
-        <main className="flex-1 bg-[#313338] flex flex-col min-w-0">
-          {/* Header Bar */}
-          <header className="h-12 border-b border-[#1E1F22] flex items-center justify-between px-4 flex-shrink-0 shadow-sm">
-            <div className="flex items-center gap-2 font-bold text-white">
-              <Hash className="w-6 h-6 text-gray-400" />
-              <span>{activeChannel ? activeChannel.name : 'select-a-channel'}</span>
-            </div>
-
-            <div className="flex items-center gap-4 text-gray-400">
-              <div className="flex items-center gap-1">
-                <button className="p-1 rounded hover:text-gray-200 hover:bg-[#3F4147] transition">
-                  <MessageSquare className="w-5 h-5" />
-                </button>
-                <button className="p-1 rounded hover:text-gray-200 hover:bg-[#3F4147] transition">
-                  <Bell className="w-5 h-5" />
-                </button>
-                <button className="p-1 rounded hover:text-gray-200 hover:bg-[#3F4147] transition">
-                  <Pin className="w-5 h-5" />
-                </button>
-                <button
-                  onClick={() => setShowMembersList(!showMembersList)}
-                  className={`p-1 rounded hover:text-gray-200 hover:bg-[#3F4147] transition ${showMembersList ? 'text-white bg-[#3F4147]' : ''}`}
-                >
-                  <Users className="w-5 h-5" />
-                </button>
+        activeChannel && activeChannel.type === 'voice' ? (
+          <main className="flex-1 bg-[#1E1F22] flex flex-col min-w-0 select-none">
+            {/* Header Bar */}
+            <header className="h-12 border-b border-[#1E1F22] bg-[#313338] flex items-center justify-between px-4 flex-shrink-0 shadow-sm text-white">
+              <div className="flex items-center gap-2 font-bold">
+                <Volume2 className="w-5 h-5 text-gray-400" />
+                <span>{activeChannel.name}</span>
+                <span className="text-[10px] bg-emerald-500/20 px-2 py-0.5 rounded text-emerald-400 font-normal uppercase tracking-wider animate-pulse">
+                  Voice Connected
+                </span>
               </div>
-
-              {/* Mock Search Bar */}
-              <div className="relative bg-[#1E1F22] rounded flex items-center px-2 py-1 gap-1 text-xs">
-                <input
-                  type="text"
-                  placeholder="Search"
-                  className="bg-transparent border-none outline-none text-gray-100 placeholder-gray-500 w-36 focus:w-48 transition-all duration-150"
-                />
-                <Search className="w-4 h-4 text-gray-500" />
-              </div>
-
-              <button className="p-1 rounded hover:text-gray-200 hover:bg-[#3F4147] transition">
-                <HelpCircle className="w-5 h-5" />
-              </button>
-            </div>
-          </header>
-
-          {/* Scrollable Message List */}
-          <div className="flex-1 overflow-y-auto p-4 space-y-4">
-            <div className="mb-6 border-b border-gray-700/30 pb-6">
-              <div className="w-16 h-16 rounded-full bg-[#3F4147] flex items-center justify-center text-white mb-4">
-                <Hash className="w-10 h-10" />
-              </div>
-              <h1 className="text-3xl font-black text-white mb-1">
-                Welcome to #{activeChannel ? activeChannel.name : 'lounge'}!
-              </h1>
-              <p className="text-gray-400 text-sm">
-                This is the start of the #{activeChannel ? activeChannel.name : 'lounge'} channel history.
-              </p>
-            </div>
-
-            {/* Messages */}
-            {messages.map((msg) => (
-              <div key={msg.id} className="flex gap-4 group hover:bg-[#2e3035] -mx-4 px-4 py-1.5 transition duration-100">
-                <img
-                  src={`https://api.dicebear.com/7.x/pixel-art/svg?seed=${msg.sender?.username || 'You'}`}
-                  alt="Avatar"
-                  className="w-10 h-10 rounded-full bg-slate-800 flex-shrink-0"
-                />
-                <div className="flex flex-col min-w-0">
-                  <div className="flex items-baseline gap-2">
-                    <span className="text-sm font-semibold text-white hover:underline cursor-pointer">
-                      {msg.sender?.username || 'You'}
-                    </span>
-                    <span className="text-[10px] text-gray-400">
-                      {new Date(msg.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
-                    </span>
-                  </div>
-                  <p className="text-sm text-gray-200 mt-1 select-text leading-relaxed break-words">
-                    {msg.content}
-                  </p>
-                </div>
-              </div>
-            ))}
-            <div ref={messagesEndRef} />
-          </div>
-
-          {/* Chat Input */}
-          {activeChannel && (
-            <form onSubmit={handleSendMessage} className="px-4 pb-6 flex-shrink-0">
-              <div className="bg-[#383A40] rounded-lg p-2.5 flex items-center gap-3">
+              <div className="flex items-center gap-2">
                 <button
                   type="button"
-                  className="p-1 text-gray-400 hover:text-gray-200 bg-[#4E5058] rounded-full hover:bg-gray-600 transition flex items-center justify-center"
+                  onClick={() => {
+                    leaveWebRTCChannel();
+                    setConnectedVoiceId(null);
+                  }}
+                  className="flex items-center gap-1.5 px-3 py-1.5 bg-red-500 hover:bg-red-600 text-white rounded text-xs font-bold transition duration-150 active:scale-95 cursor-pointer shadow-md"
                 >
-                  <Plus className="w-4 h-4 text-[#313338]" strokeWidth={3} />
+                  <LogOut className="w-3.5 h-3.5" />
+                  <span>Disconnect</span>
                 </button>
-                <input
-                  type="text"
-                  value={inputText}
-                  onChange={(e) => setInputText(e.target.value)}
-                  placeholder={`Message #` + activeChannel.name}
-                  className="bg-transparent border-none outline-none text-gray-100 placeholder-gray-500 text-sm flex-1"
-                />
-                <div className="flex items-center gap-2 text-gray-400">
-                  <button type="button" className="p-1 hover:text-gray-200 transition">
-                    <Gift className="w-5 h-5" />
+              </div>
+            </header>
+
+            {/* Video Grid Content */}
+            <div className="flex-1 p-6 overflow-y-auto flex items-center justify-center">
+              <div className="w-full max-w-6xl grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+                
+                {/* Local User Card */}
+                <div className="relative bg-[#111214] rounded-lg overflow-hidden aspect-video border border-gray-800/80 flex items-center justify-center shadow-lg group">
+                  {isWebRTCCameraOff || !localStream ? (
+                    <div className="absolute inset-0 flex flex-col items-center justify-center bg-[#2B2D31] text-gray-400 gap-2">
+                      <div className="w-16 h-16 rounded-full bg-slate-800 flex items-center justify-center text-lg font-bold border border-gray-700 shadow-inner">
+                        {user?.username?.substring(0, 2).toUpperCase()}
+                      </div>
+                      <span className="text-xs font-semibold text-gray-500">Camera Off</span>
+                    </div>
+                  ) : (
+                    <video
+                      ref={(el) => {
+                        if (el && localStream) el.srcObject = localStream;
+                      }}
+                      autoPlay
+                      playsInline
+                      muted
+                      className="w-full h-full object-cover transform -scale-x-100"
+                    />
+                  )}
+                  <div className="absolute bottom-2.5 left-2.5 bg-black/60 px-2.5 py-1 rounded text-xs font-bold text-white flex items-center gap-1.5 select-none backdrop-blur-sm">
+                    {isWebRTCMuted && <MicOff className="w-3.5 h-3.5 text-red-500" />}
+                    <span>{user?.username} (You)</span>
+                  </div>
+                </div>
+
+                {/* Remote Users Cards */}
+                {Object.keys(remoteStreams).map((peerSocketId) => {
+                  const rStream = remoteStreams[peerSocketId];
+                  const peerName = peersInfo[peerSocketId] || 'Remote User';
+                  const hasVideo = rStream && rStream.getVideoTracks().length > 0 && rStream.getVideoTracks()[0].enabled;
+                  
+                  return (
+                    <div key={peerSocketId} className="relative bg-[#111214] rounded-lg overflow-hidden aspect-video border border-gray-800/80 flex items-center justify-center shadow-lg group">
+                      {!rStream || !hasVideo ? (
+                        <div className="absolute inset-0 flex flex-col items-center justify-center bg-[#2B2D31] text-gray-400 gap-2">
+                          <div className="w-16 h-16 rounded-full bg-slate-800 flex items-center justify-center text-lg font-bold border border-gray-700 shadow-inner">
+                            {peerName.substring(0, 2).toUpperCase()}
+                          </div>
+                          <span className="text-xs font-semibold text-gray-500">Camera Off</span>
+                        </div>
+                      ) : (
+                        <video
+                          ref={(el) => {
+                            if (el && rStream) el.srcObject = rStream;
+                          }}
+                          autoPlay
+                          playsInline
+                          className="w-full h-full object-cover"
+                        />
+                      )}
+                      <div className="absolute bottom-2.5 left-2.5 bg-black/60 px-2.5 py-1 rounded text-xs font-bold text-white flex items-center gap-1.5 select-none backdrop-blur-sm">
+                        <span>{peerName}</span>
+                      </div>
+                    </div>
+                  );
+                })}
+
+              </div>
+            </div>
+
+            {/* Controls Menu */}
+            <div className="h-20 bg-[#111214] border-t border-gray-950 flex items-center justify-center gap-4 flex-shrink-0 shadow-md">
+              <button
+                type="button"
+                onClick={toggleWebRTCMic}
+                className={`w-12 h-12 rounded-full flex items-center justify-center transition-all duration-150 active:scale-95 shadow-lg cursor-pointer
+                  ${isWebRTCMuted 
+                    ? 'bg-red-500 text-white hover:bg-red-600' 
+                    : 'bg-[#313338] text-white hover:bg-[#3F4147]'}`}
+                title={isWebRTCMuted ? 'Unmute Mic' : 'Mute Mic'}
+              >
+                {isWebRTCMuted ? <MicOff className="w-5 h-5" /> : <Mic className="w-5 h-5" />}
+              </button>
+
+              <button
+                type="button"
+                onClick={toggleWebRTCCamera}
+                className={`w-12 h-12 rounded-full flex items-center justify-center transition-all duration-150 active:scale-95 shadow-lg cursor-pointer
+                  ${isWebRTCCameraOff 
+                    ? 'bg-red-500 text-white hover:bg-red-600' 
+                    : 'bg-[#313338] text-white hover:bg-[#3F4147]'}`}
+                title={isWebRTCCameraOff ? 'Turn Camera On' : 'Turn Camera Off'}
+              >
+                {isWebRTCCameraOff ? <VideoOff className="w-5 h-5" /> : <Video className="w-5 h-5" />}
+              </button>
+
+              <button
+                type="button"
+                onClick={() => {
+                  leaveWebRTCChannel();
+                  setConnectedVoiceId(null);
+                }}
+                className="w-12 h-12 rounded-full bg-red-500 text-white hover:bg-red-600 flex items-center justify-center transition-all duration-150 active:scale-95 shadow-lg cursor-pointer"
+                title="Disconnect"
+              >
+                <LogOut className="w-5 h-5" />
+              </button>
+            </div>
+          </main>
+        ) : (
+          <main className="flex-1 bg-[#313338] flex flex-col min-w-0">
+            {/* Header Bar */}
+            <header className="h-12 border-b border-[#1E1F22] flex items-center justify-between px-4 flex-shrink-0 shadow-sm">
+              <div className="flex items-center gap-2 font-bold text-white">
+                <Hash className="w-6 h-6 text-gray-400" />
+                <span>{activeChannel ? activeChannel.name : 'select-a-channel'}</span>
+              </div>
+
+              <div className="flex items-center gap-4 text-gray-400">
+                <div className="flex items-center gap-1">
+                  <button className="p-1 rounded hover:text-gray-200 hover:bg-[#3F4147] transition">
+                    <MessageSquare className="w-5 h-5" />
                   </button>
-                  <button type="button" className="p-1 hover:text-gray-200 transition">
-                    <FileCode className="w-5 h-5" />
+                  <button className="p-1 rounded hover:text-gray-200 hover:bg-[#3F4147] transition">
+                    <Bell className="w-5 h-5" />
                   </button>
-                  <button type="button" className="p-1 hover:text-gray-200 transition">
-                    <Smile className="w-5 h-5" />
+                  <button className="p-1 rounded hover:text-gray-200 hover:bg-[#3F4147] transition">
+                    <Pin className="w-5 h-5" />
+                  </button>
+                  <button
+                    onClick={() => setShowMembersList(!showMembersList)}
+                    className={`p-1 rounded hover:text-gray-200 hover:bg-[#3F4147] transition ${showMembersList ? 'text-white bg-[#3F4147]' : ''}`}
+                  >
+                    <Users className="w-5 h-5" />
                   </button>
                 </div>
+
+                {/* Mock Search Bar */}
+                <div className="relative bg-[#1E1F22] rounded flex items-center px-2 py-1 gap-1 text-xs">
+                  <input
+                    type="text"
+                    placeholder="Search"
+                    className="bg-transparent border-none outline-none text-gray-100 placeholder-gray-500 w-36 focus:w-48 transition-all duration-150"
+                  />
+                  <Search className="w-4 h-4 text-gray-500" />
+                </div>
+
+                <button className="p-1 rounded hover:text-gray-200 hover:bg-[#3F4147] transition">
+                  <HelpCircle className="w-5 h-5" />
+                </button>
               </div>
-            </form>
-          )}
-        </main>
+            </header>
+
+            {/* Scrollable Message List */}
+            <div className="flex-1 overflow-y-auto p-4 space-y-4">
+              <div className="mb-6 border-b border-gray-700/30 pb-6">
+                <div className="w-16 h-16 rounded-full bg-[#3F4147] flex items-center justify-center text-white mb-4">
+                  <Hash className="w-10 h-10" />
+                </div>
+                <h1 className="text-3xl font-black text-white mb-1">
+                  Welcome to #{activeChannel ? activeChannel.name : 'lounge'}!
+                </h1>
+                <p className="text-gray-400 text-sm">
+                  This is the start of the #{activeChannel ? activeChannel.name : 'lounge'} channel history.
+                </p>
+              </div>
+
+              {/* Messages */}
+              {messages.map((msg) => (
+                <div key={msg.id} className="flex gap-4 group hover:bg-[#2e3035] -mx-4 px-4 py-1.5 transition duration-100">
+                  <img
+                    src={`https://api.dicebear.com/7.x/pixel-art/svg?seed=${msg.sender?.username || 'You'}`}
+                    alt="Avatar"
+                    className="w-10 h-10 rounded-full bg-slate-800 flex-shrink-0"
+                  />
+                  <div className="flex flex-col min-w-0">
+                    <div className="flex items-baseline gap-2">
+                      <span className="text-sm font-semibold text-white hover:underline cursor-pointer">
+                        {msg.sender?.username || 'You'}
+                      </span>
+                      <span className="text-[10px] text-gray-400">
+                        {new Date(msg.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                      </span>
+                    </div>
+                    <p className="text-sm text-gray-200 mt-1 select-text leading-relaxed break-words">
+                      {msg.content}
+                    </p>
+                  </div>
+                </div>
+              ))}
+              <div ref={messagesEndRef} />
+            </div>
+
+            {/* Chat Input */}
+            {activeChannel && (
+              <form onSubmit={handleSendMessage} className="px-4 pb-6 flex-shrink-0">
+                <div className="bg-[#383A40] rounded-lg p-2.5 flex items-center gap-3">
+                  <button
+                    type="button"
+                    className="p-1 text-gray-400 hover:text-gray-200 bg-[#4E5058] rounded-full hover:bg-gray-600 transition flex items-center justify-center"
+                  >
+                    <Plus className="w-4 h-4 text-[#313338]" strokeWidth={3} />
+                  </button>
+                  <input
+                    type="text"
+                    value={inputText}
+                    onChange={(e) => setInputText(e.target.value)}
+                    placeholder={`Message #` + activeChannel.name}
+                    className="bg-transparent border-none outline-none text-gray-100 placeholder-gray-500 text-sm flex-1"
+                  />
+                  <div className="flex items-center gap-2 text-gray-400">
+                    <button type="button" className="p-1 hover:text-gray-200 transition">
+                      <Gift className="w-5 h-5" />
+                    </button>
+                    <button type="button" className="p-1 hover:text-gray-200 transition">
+                      <FileCode className="w-5 h-5" />
+                    </button>
+                    <button type="button" className="p-1 hover:text-gray-200 transition">
+                      <Smile className="w-5 h-5" />
+                    </button>
+                  </div>
+                </div>
+              </form>
+            )}
+          </main>
+        )
       ) : (
         // Friends Page Content
         <main className="flex-1 bg-[#313338] flex flex-col min-w-0">
