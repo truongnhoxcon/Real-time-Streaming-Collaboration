@@ -1,5 +1,5 @@
 const db = require('../config/db');
-const { pubClient, subClient, setUserPresence, removeUserPresence } = require('../config/redis');
+const { redisClient, pubClient, subClient, setUserPresence, removeUserPresence } = require('../config/redis');
 
 /**
  * Register presence socket events and manage connection lifecycles.
@@ -15,6 +15,9 @@ async function registerPresenceHandler(io, socket) {
   socket.join(`user:${userId}`);
 
   try {
+    // Mark user as globally online in Redis with 60s TTL
+    await redisClient.set(`presence:user:${userId}`, 'online', { EX: 60 });
+
     // 1. Mark user as online in all servers they are a member of
     const userServers = await db.query(
       'SELECT server_id FROM server_members WHERE user_id = $1',
@@ -45,6 +48,9 @@ async function registerPresenceHandler(io, socket) {
       try {
         console.log(`[Presence Refresh] Refreshing TTL for user ${username} (${userId})`);
         
+        // Refresh global presence key
+        await redisClient.set(`presence:user:${userId}`, 'online', { EX: 60 });
+
         const servers = await db.query(
           'SELECT server_id FROM server_members WHERE user_id = $1',
           [userId]
@@ -65,6 +71,27 @@ async function registerPresenceHandler(io, socket) {
     console.error(`Error initializing presence for user ${userId}:`, err);
   }
 
+  // Handle get_users_presence request
+  socket.on('get_users_presence', async ({ userIds }, callback) => {
+    try {
+      const statuses = {};
+      if (Array.isArray(userIds)) {
+        for (const id of userIds) {
+          const status = await redisClient.get(`presence:user:${id}`);
+          statuses[id] = status || 'offline';
+        }
+      }
+      if (typeof callback === 'function') {
+        callback({ success: true, statuses });
+      }
+    } catch (err) {
+      console.error(`Error handling get_users_presence for ${userId}:`, err);
+      if (typeof callback === 'function') {
+        callback({ success: false, error: err.message });
+      }
+    }
+  });
+
   // Handle Disconnection
   socket.on('disconnect', async (reason) => {
     console.log(`User ${username} disconnected. Reason: ${reason}. Socket ID: ${socket.id}`);
@@ -82,6 +109,9 @@ async function registerPresenceHandler(io, socket) {
         // No other active sockets for this user -> Go offline
         console.log(`User ${username} has no other active connections. Going offline.`);
         
+        // Delete global presence in Redis
+        await redisClient.del(`presence:user:${userId}`);
+
         const userServers = await db.query(
           'SELECT server_id FROM server_members WHERE user_id = $1',
           [userId]

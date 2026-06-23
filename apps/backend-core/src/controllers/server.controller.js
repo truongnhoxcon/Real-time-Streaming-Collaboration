@@ -253,6 +253,110 @@ async function updateServerMemberProfile(req, res) {
   }
 }
 
+async function getServerMembers(req, res) {
+  try {
+    const { serverId } = req.params;
+    const result = await db.query(
+      `SELECT u.id, u.username, u.email, sm.role, sm.nickname, sm.avatar, sm.about_me as "aboutMe"
+       FROM server_members sm
+       JOIN users u ON sm.user_id = u.id
+       WHERE sm.server_id = $1`,
+      [serverId]
+    );
+    return res.status(200).json(result.rows);
+  } catch (error) {
+    return res.status(500).json({ error: 'Internal server error fetching members' });
+  }
+}
+
+async function updateServerMemberProfileMultipart(req, res) {
+  try {
+    const { serverId } = req.params;
+    const userId = req.user.id;
+    const { nickname, aboutMe, removeAvatar } = req.body;
+    let avatarUrl = undefined;
+
+    // Check if file was uploaded
+    if (req.file) {
+      avatarUrl = `/uploads/${req.file.filename}`;
+    } else if (removeAvatar === 'true') {
+      avatarUrl = '';
+    }
+
+    // Retrieve current values first to handle optional parameters
+    const currentResult = await db.query(
+      'SELECT nickname, avatar, about_me as "aboutMe" FROM server_members WHERE server_id = $1 AND user_id = $2',
+      [serverId, userId]
+    );
+
+    if (currentResult.rowCount === 0) {
+      return res.status(404).json({ error: 'Member not found in this server' });
+    }
+
+    const currentProfile = currentResult.rows[0];
+    const finalNickname = nickname !== undefined ? nickname : currentProfile.nickname;
+    const finalAboutMe = aboutMe !== undefined ? aboutMe : currentProfile.aboutMe;
+    const finalAvatarUrl = avatarUrl !== undefined ? avatarUrl : currentProfile.avatar;
+
+    const result = await db.query(
+      `UPDATE server_members 
+       SET nickname = $1, avatar = $2, about_me = $3 
+       WHERE server_id = $4 AND user_id = $5 
+       RETURNING nickname, avatar, about_me as "aboutMe"`,
+      [finalNickname || '', finalAvatarUrl || '', finalAboutMe || '', serverId, userId]
+    );
+
+    return res.status(200).json({
+      message: 'Server profile updated successfully',
+      profile: result.rows[0]
+    });
+  } catch (error) {
+    console.error('Error updating server member profile:', error);
+    return res.status(500).json({ error: 'Internal server error updating member profile' });
+  }
+}
+
+async function getServerMemberSpecificProfile(req, res) {
+  try {
+    const { serverId, userId } = req.params;
+
+    // Query combination of user table and server member table
+    const result = await db.query(
+      `SELECT 
+        u.id, 
+        u.username,
+        COALESCE(NULLIF(sm.nickname, ''), NULLIF(u.display_name, ''), u.username) AS "displayName",
+        COALESCE(NULLIF(sm.avatar, ''), u.avatar_url) AS "avatarUrl",
+        COALESCE(NULLIF(sm.about_me, ''), u.about_me) AS "aboutMe",
+        u.banner_color AS "bannerColor",
+        u.custom_status AS "customStatus"
+      FROM users u
+      LEFT JOIN server_members sm ON sm.user_id = u.id AND sm.server_id = $1
+      WHERE u.id = $2`,
+      [serverId, userId]
+    );
+
+    if (result.rowCount === 0) {
+      return res.status(404).json({ error: 'Member not found' });
+    }
+
+    const profile = result.rows[0];
+    return res.status(200).json({
+      success: true,
+      id: profile.id,
+      username: profile.username,
+      displayName: profile.displayName,
+      avatarUrl: profile.avatarUrl || '',
+      bannerColor: profile.bannerColor || '#5865F2',
+      aboutMe: profile.aboutMe || '',
+      customStatus: profile.customStatus || ''
+    });
+  } catch (error) {
+    console.error('Error fetching server member specific profile:', error);
+    return res.status(500).json({ error: 'Internal server error fetching member profile' });
+  }
+}
+
 module.exports = {
   createServer,
   getVoiceCredentials,
@@ -260,6 +364,9 @@ module.exports = {
   joinServer,
   getServerMemberProfile,
   updateServerMemberProfile,
+  updateServerMemberProfileMultipart,
+  getServerMemberSpecificProfile,
+  getServerMembers,
 };
 
 

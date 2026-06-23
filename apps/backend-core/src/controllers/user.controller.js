@@ -12,7 +12,7 @@ async function getMyDMs(req, res) {
     const userId = req.user.id;
 
     // Check if user has any DMs
-    let dmsResult = await db.query(
+    const dmsResult = await db.query(
       `SELECT ud.id as dm_id, ud.dm_user_id, u.username 
        FROM user_dms ud
        JOIN users u ON ud.dm_user_id = u.id
@@ -20,35 +20,6 @@ async function getMyDMs(req, res) {
        ORDER BY ud.created_at DESC`,
       [userId]
     );
-
-    // Auto-seed DMs if empty
-    if (dmsResult.rowCount === 0) {
-      // Find seed users
-      const seedUsers = await db.query(
-        "SELECT id FROM users WHERE username IN ('Alex Mercer', 'Sarah Connor') AND id != $1",
-        [userId]
-      );
-
-      for (const row of seedUsers.rows) {
-        await db.query(
-          `INSERT INTO user_dms (user_id, dm_user_id, active) 
-           VALUES ($1, $2, TRUE) 
-           ON CONFLICT (user_id, dm_user_id) 
-           DO UPDATE SET active = TRUE`,
-          [userId, row.id]
-        );
-      }
-
-      // Query again
-      dmsResult = await db.query(
-        `SELECT ud.id as dm_id, ud.dm_user_id, u.username 
-         FROM user_dms ud
-         JOIN users u ON ud.dm_user_id = u.id
-         WHERE ud.user_id = $1 AND ud.active = TRUE
-         ORDER BY ud.created_at DESC`,
-        [userId]
-      );
-    }
 
     const dms = dmsResult.rows.map(row => ({
       id: row.dm_id,
@@ -100,7 +71,7 @@ async function getMyFriends(req, res) {
     const { status } = req.query; // 'online', 'all', 'pending'
 
     // Check if user has any friends at all
-    let friendsResult = await db.query(
+    const friendsResult = await db.query(
       `SELECT f.status as friend_status, u.id as friend_id, u.username, u.email
        FROM friends f
        JOIN users u ON f.friend_id = u.id
@@ -108,48 +79,14 @@ async function getMyFriends(req, res) {
       [userId]
     );
 
-    // Auto-seed some friends if user has 0 friends
-    if (friendsResult.rowCount === 0) {
-      const seedUsers = await db.query(
-        "SELECT id, username FROM users WHERE username IN ('Alex Mercer', 'Sarah Connor', 'Bruce Wayne', 'Peter Parker', 'Viet Nguyen') AND id != $1",
-        [userId]
-      );
-
-      for (const row of seedUsers.rows) {
-        // Seed some as accepted (Alex, Sarah, Bruce, Peter) and some as pending (Viet)
-        const fStatus = row.username === 'Viet Nguyen' ? 'pending' : 'accepted';
-        await db.query(
-          `INSERT INTO friends (user_id, friend_id, status) 
-           VALUES ($1, $2, $3) 
-           ON CONFLICT (user_id, friend_id) DO NOTHING`,
-          [userId, row.id, fStatus]
-        );
-      }
-
-      // Query again
-      friendsResult = await db.query(
-        `SELECT f.status as friend_status, u.id as friend_id, u.username, u.email
-         FROM friends f
-         JOIN users u ON f.friend_id = u.id
-         WHERE f.user_id = $1`,
-         [userId]
-      );
-    }
-
-    // Process and filter based on 'status' query param
-    // We will simulate presence ('online' vs 'offline') for the seed friends
-    // Let's say: Alex Mercer, Sarah Connor, Bruce Wayne are 'online'; others are 'offline'
-    const onlineUsernames = ['Alex Mercer', 'Sarah Connor', 'Bruce Wayne'];
-
     let friends = friendsResult.rows.map(row => {
-      const isOnline = onlineUsernames.includes(row.username);
       return {
         id: row.friend_id,
         username: row.username,
         email: row.email,
         friendStatus: row.friend_status, // 'accepted' or 'pending'
-        status: isOnline ? 'online' : 'offline', // simulated network presence status
-        customStatus: isOnline ? 'Active on desktop' : 'Offline'
+        status: 'offline',
+        customStatus: 'Offline'
       };
     });
 
@@ -226,8 +163,8 @@ async function addFriend(req, res) {
       [userId, targetUser.id]
     );
 
-    return res.status(200).json({ 
-      success: true, 
+    return res.status(200).json({
+      success: true,
       message: `Successfully added ${targetUser.username} as a friend!`,
       friend: {
         id: targetUser.id,
@@ -314,7 +251,7 @@ async function getMe(req, res) {
   try {
     const userId = req.user.id;
     const userResult = await db.query(
-      'SELECT id, username, email, created_at FROM users WHERE id = $1',
+      'SELECT id, username, email, display_name as "displayName", avatar_url as "avatarUrl", about_me as "aboutMe", banner_color as "bannerColor", custom_status as "customStatus", created_at FROM users WHERE id = $1',
       [userId]
     );
 
@@ -329,6 +266,11 @@ async function getMe(req, res) {
         id: user.id,
         username: user.username,
         email: user.email,
+        displayName: user.displayName,
+        avatarUrl: user.avatarUrl,
+        aboutMe: user.aboutMe,
+        bannerColor: user.bannerColor,
+        customStatus: user.customStatus,
         createdAt: user.created_at
       }
     });
@@ -376,6 +318,59 @@ async function verifyPassword(req, res) {
   }
 }
 
+/**
+ * PATCH /api/users/me
+ * Updates current user's profile details.
+ */
+async function updateMe(req, res) {
+  try {
+    const userId = req.user.id;
+    const { displayName, aboutMe, bannerColor, customStatus, removeAvatar } = req.body;
+    let avatarUrl = undefined;
+
+    // Check if file was uploaded
+    if (req.file) {
+      avatarUrl = `/api/uploads/${req.file.filename}`;
+    } else if (removeAvatar === 'true') {
+      avatarUrl = '';
+    }
+
+    // Retrieve current values first to handle optional parameters
+    const currentResult = await db.query(
+      'SELECT display_name, avatar_url, about_me, banner_color, custom_status FROM users WHERE id = $1',
+      [userId]
+    );
+
+    if (currentResult.rowCount === 0) {
+      return res.status(404).json({ error: 'User not found' });
+    }
+
+    const currentProfile = currentResult.rows[0];
+    const finalDisplayName = displayName !== undefined ? displayName : currentProfile.display_name;
+    const finalAboutMe = aboutMe !== undefined ? aboutMe : currentProfile.about_me;
+    const finalBannerColor = bannerColor !== undefined ? bannerColor : currentProfile.banner_color;
+    const finalCustomStatus = customStatus !== undefined ? customStatus : currentProfile.custom_status;
+    const finalAvatarUrl = avatarUrl !== undefined ? avatarUrl : currentProfile.avatar_url;
+
+    const result = await db.query(
+      `UPDATE users 
+       SET display_name = $1, avatar_url = $2, about_me = $3, banner_color = $4, custom_status = $5
+       WHERE id = $6 
+       RETURNING id, username, email, display_name as "displayName", avatar_url as "avatarUrl", about_me as "aboutMe", banner_color as "bannerColor", custom_status as "customStatus", created_at`,
+      [finalDisplayName || '', finalAvatarUrl || '', finalAboutMe || '', finalBannerColor || '#5865F2', finalCustomStatus || '', userId]
+    );
+
+    return res.status(200).json({
+      success: true,
+      message: 'User profile updated successfully',
+      user: result.rows[0]
+    });
+  } catch (error) {
+    console.error('Error updating user profile:', error);
+    return res.status(500).json({ error: 'Internal server error updating user profile' });
+  }
+}
+
 module.exports = {
   getMyDMs,
   hideDM,
@@ -384,6 +379,8 @@ module.exports = {
   getActivities,
   startDM,
   getMe,
-  verifyPassword
+  verifyPassword,
+  updateMe
 };
+
 

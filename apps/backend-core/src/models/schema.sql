@@ -104,5 +104,12 @@ ON CONFLICT (id) DO NOTHING;
 
 -- Add server profile columns to server_members table
 ALTER TABLE server_members ADD COLUMN IF NOT EXISTS nickname VARCHAR(50);
-ALTER TABLE server_members ADD COLUMN IF NOT EXISTS avatar VARCHAR(100);
+ALTER TABLE server_members ADD COLUMN IF NOT EXISTS avatar VARCHAR(255);
 ALTER TABLE server_members ADD COLUMN IF NOT EXISTS about_me VARCHAR(190);
+
+-- Add user profile columns to users table
+ALTER TABLE users ADD COLUMN IF NOT EXISTS display_name VARCHAR(50);
+ALTER TABLE users ADD COLUMN IF NOT EXISTS avatar_url VARCHAR(255);
+ALTER TABLE users ADD COLUMN IF NOT EXISTS about_me VARCHAR(190);
+ALTER TABLE users ADD COLUMN IF NOT EXISTS banner_color VARCHAR(30) DEFAULT '#5865F2';
+ALTER TABLE users ADD COLUMN IF NOT EXISTS custom_status VARCHAR(100);

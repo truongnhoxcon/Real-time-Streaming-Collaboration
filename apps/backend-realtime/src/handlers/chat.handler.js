@@ -51,6 +51,17 @@ function registerChatHandler(io, socket) {
 
       console.log(`User ${socket.user.username} joined channel room "channel:${channelId}" and server room "server:${serverId}"`);
       socket.emit('joined_channel', { serverId, channelId });
+
+      // Fetch online users from Redis for this server
+      try {
+        const { redisClient } = require('../config/redis');
+        const keys = await redisClient.keys(`presence:workspace:${serverId}:*`);
+        const onlineUserIds = keys.map(key => key.split(':').pop());
+        socket.emit('server_online_users', { serverId, onlineUserIds });
+        console.log(`Sent ${onlineUserIds.length} online users for server ${serverId} to user ${socket.user.username}`);
+      } catch (redisErr) {
+        console.error('Error fetching online users from Redis in join_channel:', redisErr.message);
+      }
     } catch (err) {
       console.error('Error handling join_channel:', err);
       socket.emit('error', { message: 'Internal server error while joining channel' });
