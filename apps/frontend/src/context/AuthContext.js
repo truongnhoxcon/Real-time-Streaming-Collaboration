@@ -9,24 +9,48 @@ export const AuthProvider = ({ children }) => {
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [loading, setLoading] = useState(true);
 
-  // Attempt to restore session on mount
+  // Attempt to restore session on mount and sync with database
   useEffect(() => {
-    try {
-      const storedToken = localStorage.getItem('token');
-      const storedUser = localStorage.getItem('user');
-      if (storedToken && storedUser) {
-        setToken(storedToken);
-        setUser(JSON.parse(storedUser));
-        setIsAuthenticated(true);
+    const restoreSession = async () => {
+      try {
+        const storedToken = localStorage.getItem('token');
+        const storedUser = localStorage.getItem('user');
+        if (storedToken && storedUser) {
+          setToken(storedToken);
+          setUser(JSON.parse(storedUser));
+          setIsAuthenticated(true);
+
+          // Fetch fresh user data from API
+          try {
+            const response = await api.get('/api/users/me', {
+              headers: { Authorization: `Bearer ${storedToken}` }
+            });
+            if (response.data && response.data.success) {
+              setUser(response.data.user);
+              localStorage.setItem('user', JSON.stringify(response.data.user));
+            }
+          } catch (apiErr) {
+            console.error('Failed to sync user session with backend:', apiErr);
+          }
+        }
+      } catch (e) {
+        console.error('Failed to parse stored user session:', e);
+        localStorage.removeItem('token');
+        localStorage.removeItem('user');
+      } finally {
+        setLoading(false);
       }
-    } catch (e) {
-      console.error('Failed to parse stored user session:', e);
-      localStorage.removeItem('token');
-      localStorage.removeItem('user');
-    } finally {
-      setLoading(false);
-    }
+    };
+    restoreSession();
   }, []);
+
+  /**
+   * Helper to manually update user details in Context & local storage
+   */
+  const updateCurrentUserState = (updatedUser) => {
+    setUser(updatedUser);
+    localStorage.setItem('user', JSON.stringify(updatedUser));
+  };
 
   /**
    * Handle user login.
@@ -87,13 +111,13 @@ export const AuthProvider = ({ children }) => {
     setToken(null);
     setUser(null);
     setIsAuthenticated(false);
-    
+
     // Redirect to login page
     window.location.hash = '#login';
   };
 
   return (
-    <AuthContext.Provider value={{ user, token, isAuthenticated, loading, login, register, logout }}>
+    <AuthContext.Provider value={{ user, token, isAuthenticated, loading, login, register, logout, updateCurrentUserState }}>
       {children}
     </AuthContext.Provider>
   );

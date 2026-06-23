@@ -19,6 +19,9 @@ export const ChatProvider = ({ children }) => {
   const [messages, setMessages] = useState([]);
   const [members, setMembers] = useState([]);
   const [loading, setLoading] = useState(false);
+  const [globalOnlineUserIds, setGlobalOnlineUserIds] = useState(() => {
+    return new Set();
+  });
 
   // Keep ref of active ids to use inside socket event listeners
   const activeChannelIdRef = useRef(localStorage.getItem('activeChannelId') || null);
@@ -110,6 +113,25 @@ export const ChatProvider = ({ children }) => {
       setMembers((prev) =>
         prev.map((m) => (m.id === userId ? { ...m, status } : m))
       );
+      setGlobalOnlineUserIds((prev) => {
+        const next = new Set(prev);
+        if (status === 'online') {
+          next.add(userId);
+        } else {
+          next.delete(userId);
+        }
+        return next;
+      });
+    };
+
+    // Listen for server online users list (sent by backend-realtime on join_channel)
+    const handleServerOnlineUsers = ({ serverId, onlineUserIds }) => {
+      console.log(`[WebSocket Presence] Online users for server ${serverId}:`, onlineUserIds);
+      setGlobalOnlineUserIds((prev) => {
+        const next = new Set(prev);
+        onlineUserIds.forEach((id) => next.add(id));
+        return next;
+      });
     };
 
     socket.on('message', handleNewMessage);
@@ -117,6 +139,7 @@ export const ChatProvider = ({ children }) => {
     socket.on('presence_change', handlePresenceChange);
     socket.on('user_online', (data) => handlePresenceChange({ ...data, status: 'online' }));
     socket.on('user_offline', (data) => handlePresenceChange({ ...data, status: 'offline' }));
+    socket.on('server_online_users', handleServerOnlineUsers);
 
     return () => {
       socket.off('message', handleNewMessage);
@@ -124,6 +147,7 @@ export const ChatProvider = ({ children }) => {
       socket.off('presence_change', handlePresenceChange);
       socket.off('user_online');
       socket.off('user_offline');
+      socket.off('server_online_users', handleServerOnlineUsers);
     };
   }, [socket]);
 
@@ -298,6 +322,8 @@ export const ChatProvider = ({ children }) => {
         createChannel,
         fetchServers,
         socket,
+        globalOnlineUserIds,
+        setGlobalOnlineUserIds,
       }}
     >
       {children}
