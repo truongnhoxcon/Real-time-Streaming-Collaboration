@@ -35,3 +35,9 @@ realtime_backend_image = "655103423690.dkr.ecr.us-east-1.amazonaws.com/antigroup
 
 # ── Cảnh báo qua Email ───────────────────────────────────────────────────────
 alert_email = "truongnguyen130824@gmail.com"  # ← THAY
+
+# ── GitHub Actions OIDC ──────────────────────────────────────────────────────
+# Dùng để tạo IAM Role cho GitHub Actions CI/CD (không cần access key).
+# Lấy từ URL repo: https://github.com/<github_org>/<github_repo>
+github_org  = "your-github-org"   # ← THAY: tên GitHub org hoặc username
+github_repo = "Real-time-Streaming-Collaboration"  # ← THAY nếu tên repo khác

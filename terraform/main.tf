@@ -77,15 +77,21 @@ module "s3" {
 # ─────────────────────────────────────────────────────────────────────────────
 
 module "iam" {
-  source                 = "./modules/iam"
-  project_name           = var.project_name
-  environment            = var.environment
-  aws_region             = var.aws_region
-  s3_bucket_arn          = module.s3.files_bucket_arn
-  db_password_secret_arn = module.secrets.db_password_secret_arn
-  jwt_secret_arn         = module.secrets.jwt_secret_arn
-  twilio_secret_arn      = module.secrets.twilio_credentials_secret_arn
-  redis_auth_secret_arn  = module.secrets.redis_auth_token_secret_arn
+  source                  = "./modules/iam"
+  project_name            = var.project_name
+  environment             = var.environment
+  aws_region              = var.aws_region
+  s3_bucket_arn           = module.s3.files_bucket_arn
+  db_password_secret_arn  = module.secrets.db_password_secret_arn
+  jwt_secret_arn          = module.secrets.jwt_secret_arn
+  twilio_secret_arn       = module.secrets.twilio_credentials_secret_arn
+  redis_auth_secret_arn   = module.secrets.redis_auth_token_secret_arn
+  google_oauth_secret_arn = module.secrets.google_oauth_secret_arn
+
+  # GitHub Actions OIDC role – enables keyless CI/CD authentication
+  create_github_actions_role = true
+  github_org                 = var.github_org
+  github_repo                = var.github_repo
 
   depends_on = [module.s3, module.secrets]
 }
@@ -161,9 +167,10 @@ module "ecs" {
   redis_host = module.elasticache.redis_endpoint
 
   # Secrets
-  db_password_secret_arn = module.secrets.db_password_secret_arn
-  jwt_secret_arn         = module.secrets.jwt_secret_arn
-  twilio_secret_arn      = module.secrets.twilio_credentials_secret_arn
+  db_password_secret_arn  = module.secrets.db_password_secret_arn
+  jwt_secret_arn          = module.secrets.jwt_secret_arn
+  twilio_secret_arn       = module.secrets.twilio_credentials_secret_arn
+  google_oauth_secret_arn = module.secrets.google_oauth_secret_arn
 
   # Networking
   private_subnet_ids     = module.vpc.private_subnet_ids

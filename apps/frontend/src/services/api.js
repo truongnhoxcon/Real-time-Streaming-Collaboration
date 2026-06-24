@@ -1,10 +1,7 @@
 import axios from 'axios';
 
-const isProd = import.meta.env.PROD;
-const currentHost = window.location.origin;
-
-export const API_BASE_URL = isProd ? currentHost : 'http://localhost:5000';
-export const WS_URL = isProd ? `${currentHost.replace(/^http/, 'ws')}/ws` : 'ws://localhost:9080';
+export const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:5000';
+export const WS_URL = import.meta.env.VITE_WS_URL || 'ws://localhost:9080';
 
 // Create an Axios instance pointing to the REST API Core Backend
 const api = axios.create({

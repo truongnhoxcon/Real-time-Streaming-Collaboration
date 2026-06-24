@@ -303,6 +303,9 @@ async function verifyPassword(req, res) {
     }
 
     const user = userResult.rows[0];
+    if (!user.password_hash) {
+      return res.status(400).json({ error: 'This account does not have a password set (registered via Google OAuth).' });
+    }
     const isPasswordValid = await bcrypt.compare(password, user.password_hash);
     if (!isPasswordValid) {
       return res.status(401).json({ error: 'Incorrect password.' });

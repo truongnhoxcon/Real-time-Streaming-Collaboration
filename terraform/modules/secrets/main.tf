@@ -165,7 +165,37 @@ resource "aws_secretsmanager_secret_version" "redis_auth_token" {
 }
 
 # ─────────────────────────────────────────────────────────────────────────────
-# 5. Automatic rotation for db-password (90-day schedule)
+# 5. google-oauth – Google OAuth 2.0 client credentials
+# ─────────────────────────────────────────────────────────────────────────────
+
+resource "aws_secretsmanager_secret" "google_oauth" {
+  name        = "${local.name_prefix}/google-oauth"
+  description = "Google OAuth 2.0 client credentials for ${var.project_name} (${var.environment})"
+
+  recovery_window_in_days = 7
+
+  tags = merge(local.common_tags, {
+    Name    = "${local.name_prefix}/google-oauth"
+    Purpose = "google-oauth"
+  })
+}
+
+resource "aws_secretsmanager_secret_version" "google_oauth" {
+  secret_id = aws_secretsmanager_secret.google_oauth.id
+
+  secret_string = jsonencode({
+    clientId     = "CHANGE_ME"
+    clientSecret = "CHANGE_ME"
+  })
+
+  # Do not overwrite once set manually (e.g. via AWS Console or CLI)
+  lifecycle {
+    ignore_changes = [secret_string]
+  }
+}
+
+# ─────────────────────────────────────────────────────────────────────────────
+# 6. Automatic rotation for db-password (90-day schedule)
 #    Conditionally created – only when var.db_rotation_lambda_arn is provided.
 #    The rotation Lambda must exist before apply (typically managed by AWS or
 #    a separate Terraform module for Secrets Manager rotation).
