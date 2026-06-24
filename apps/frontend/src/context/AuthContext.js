@@ -78,6 +78,31 @@ export const AuthProvider = ({ children }) => {
   };
 
   /**
+   * Handle login with Google OAuth.
+   * Calls POST /api/auth/google
+   */
+  const loginWithGoogle = async (idToken) => {
+    try {
+      const response = await api.post('/api/auth/google', { idToken });
+      const { token: receivedToken, user: receivedUser } = response.data;
+
+      localStorage.setItem('token', receivedToken);
+      localStorage.setItem('user', JSON.stringify(receivedUser));
+
+      setToken(receivedToken);
+      setUser(receivedUser);
+      setIsAuthenticated(true);
+
+      // Redirect to the main application
+      window.location.hash = '#app';
+      return { success: true };
+    } catch (error) {
+      const errorMsg = error.response?.data?.error || 'Google sign-in failed';
+      return { success: false, error: errorMsg };
+    }
+  };
+
+  /**
    * Handle user registration.
    * Calls POST /api/auth/register
    */
@@ -117,7 +142,7 @@ export const AuthProvider = ({ children }) => {
   };
 
   return (
-    <AuthContext.Provider value={{ user, token, isAuthenticated, loading, login, register, logout, updateCurrentUserState }}>
+    <AuthContext.Provider value={{ user, token, isAuthenticated, loading, login, loginWithGoogle, register, logout, updateCurrentUserState }}>
       {children}
     </AuthContext.Provider>
   );

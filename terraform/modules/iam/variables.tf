@@ -56,6 +56,11 @@ variable "redis_auth_secret_arn" {
   type        = string
 }
 
+variable "google_oauth_secret_arn" {
+  description = "ARN of the Secrets Manager secret that holds Google OAuth 2.0 client credentials."
+  type        = string
+}
+
 # ─────────────────────────────────────────────────────────────────────────────
 # GitHub Actions OIDC (optional – disabled by default)
 # ─────────────────────────────────────────────────────────────────────────────

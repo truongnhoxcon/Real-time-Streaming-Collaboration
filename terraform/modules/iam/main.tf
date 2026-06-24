@@ -127,6 +127,7 @@ resource "aws_iam_policy" "secrets_execution" {
           var.jwt_secret_arn,
           var.twilio_secret_arn,
           var.redis_auth_secret_arn,
+          var.google_oauth_secret_arn,
         ]
       }
     ]

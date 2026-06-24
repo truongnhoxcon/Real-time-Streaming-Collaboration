@@ -1,0 +1,164 @@
+# ─────────────────────────────────────────────────────────────────────────────
+# CI Workflow – Pull Request checks
+#
+# Triggers on every PR targeting `main`.
+# Jobs run in parallel:
+#   • lint-frontend      – npm ci + vite build
+#   • lint-backend-core  – npm ci (no build script; verifies dependency tree)
+#   • lint-backend-realtime – npm ci
+#   • terraform-check    – fmt -check + validate + plan (read-only, no apply)
+# ─────────────────────────────────────────────────────────────────────────────
+
+name: CI
+
+on:
+  pull_request:
+    branches:
+      - main
+
+# Cancel any in-progress run for the same PR to save runner minutes
+concurrency:
+  group: ci-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+env:
+  NODE_VERSION: "20"
+  TF_VERSION: "1.8.5"
+
+# ─── Job: Frontend ────────────────────────────────────────────────────────────
+jobs:
+  lint-frontend:
+    name: "Frontend – install & build"
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: apps/frontend
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js ${{ env.NODE_VERSION }}
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: "npm"
+          cache-dependency-path: apps/frontend/package-lock.json
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build (vite build)
+        run: npm run build
+
+# ─── Job: Backend Core ────────────────────────────────────────────────────────
+  lint-backend-core:
+    name: "Backend Core – install"
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: apps/backend-core
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js ${{ env.NODE_VERSION }}
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: "npm"
+          cache-dependency-path: apps/backend-core/package-lock.json
+
+      - name: Install dependencies
+        run: npm ci
+
+      # Validate that the app entry point is parseable (syntax check)
+      - name: Syntax check
+        run: node --check src/app.js
+
+# ─── Job: Backend Realtime ────────────────────────────────────────────────────
+  lint-backend-realtime:
+    name: "Backend Realtime – install"
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: apps/backend-realtime
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js ${{ env.NODE_VERSION }}
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: "npm"
+          cache-dependency-path: apps/backend-realtime/package-lock.json
+
+      - name: Install dependencies
+        run: npm ci
+
+      # Validate entry point syntax
+      - name: Syntax check
+        run: node --check src/index.js
+
+# ─── Job: Terraform checks ────────────────────────────────────────────────────
+  terraform-check:
+    name: "Terraform – fmt / validate / plan"
+    runs-on: ubuntu-latest
+    # OIDC: read-only plan only; no state writes, no apply
+    permissions:
+      id-token: write   # required for OIDC token request
+      contents: read
+
+    defaults:
+      run:
+        working-directory: terraform
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Terraform ${{ env.TF_VERSION }}
+        uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: ${{ env.TF_VERSION }}
+
+      # Cache the Terraform plugin directory to avoid re-downloading providers
+      - name: Cache Terraform providers
+        uses: actions/cache@v4
+        with:
+          path: terraform/.terraform
+          key: terraform-${{ hashFiles('terraform/.terraform.lock.hcl') }}
+          restore-keys: terraform-
+
+      - name: Configure AWS credentials (OIDC)
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.AWS_GITHUB_ACTIONS_ROLE_ARN }}
+          aws-region: ${{ secrets.AWS_REGION }}
+
+      - name: Terraform Init
+        run: terraform init -input=false
+
+      - name: Terraform Format check
+        run: terraform fmt -check -recursive
+
+      - name: Terraform Validate
+        run: terraform validate
+
+      - name: Terraform Plan (dry-run)
+        run: |
+          terraform plan \
+            -input=false \
+            -var="account_id=${{ secrets.AWS_ACCOUNT_ID }}" \
+            -var="alert_email=${{ secrets.ALERT_EMAIL }}" \
+            -var="frontend_image=${{ secrets.AWS_ACCOUNT_ID }}.dkr.ecr.${{ secrets.AWS_REGION }}.amazonaws.com/antigroup-frontend:latest" \
+            -var="core_backend_image=${{ secrets.AWS_ACCOUNT_ID }}.dkr.ecr.${{ secrets.AWS_REGION }}.amazonaws.com/antigroup-core:latest" \
+            -var="realtime_backend_image=${{ secrets.AWS_ACCOUNT_ID }}.dkr.ecr.${{ secrets.AWS_REGION }}.amazonaws.com/antigroup-realtime:latest" \
+            -no-color \
+            -out=tfplan
+        # Plan output is intentionally not uploaded to artifacts here since
+        # it may contain sensitive endpoint values. The deploy job runs its
+        # own plan+apply atomically after merge.

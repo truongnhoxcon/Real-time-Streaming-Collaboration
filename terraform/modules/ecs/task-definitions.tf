@@ -50,6 +50,14 @@ resource "aws_ecs_task_definition" "core_backend" {
         {
           name      = "TWILIO_AUTH_TOKEN"
           valueFrom = "${var.twilio_secret_arn}:authToken::"
+        },
+        {
+          name      = "GOOGLE_CLIENT_ID"
+          valueFrom = "${var.google_oauth_secret_arn}:clientId::"
+        },
+        {
+          name      = "GOOGLE_CLIENT_SECRET"
+          valueFrom = "${var.google_oauth_secret_arn}:clientSecret::"
         }
       ]
 

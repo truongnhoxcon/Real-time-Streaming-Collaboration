@@ -806,7 +806,7 @@ export default function MainAppPage() {
   };
 
   const handleCopyLink = () => {
-    const inviteUrl = `http://localhost:5173/invite/${activeServerId || 'abc123xyz'}`;
+    const inviteUrl = `${window.location.origin}/invite/${activeServerId || 'abc123xyz'}`;
     navigator.clipboard.writeText(inviteUrl)
       .then(() => {
         setInviteCopied(true);
@@ -2310,7 +2310,7 @@ export default function MainAppPage() {
                     <input
                       type="text"
                       required
-                      placeholder="e.g. http://localhost:5173/invite/abc123xyz"
+                      placeholder={`e.g. ${window.location.origin}/invite/abc123xyz`}
                       value={inviteLinkInput}
                       onChange={(e) => setInviteLinkInput(e.target.value)}
                       className="w-full bg-[#1E1F22] border border-gray-800 rounded-md p-3 text-sm text-gray-100 outline-none focus:ring-2 focus:ring-[#5865F2] focus:border-transparent transition"
@@ -2322,7 +2322,7 @@ export default function MainAppPage() {
                       Invites should look like:
                     </span>
                     <ul className="text-xs text-gray-400 space-y-1 font-medium list-disc list-inside">
-                      <li><code className="text-gray-200">http://localhost:5173/invite/abc123xyz</code></li>
+                      <li><code className="text-gray-200">{window.location.origin}/invite/abc123xyz</code></li>
                       <li><code className="text-gray-200">abc123xyz</code> (for fallback demo join)</li>
                       <li><code className="text-gray-200">a9c512d7-b50a-4841-a1b9-dcd54d9241b3</code> (Server UUID)</li>
                     </ul>
@@ -2489,7 +2489,7 @@ export default function MainAppPage() {
                 <input
                   type="text"
                   readOnly
-                  value={`http://localhost:5173/invite/${activeServerId || 'abc123xyz'}`}
+                  value={`${window.location.origin}/invite/${activeServerId || 'abc123xyz'}`}
                   className="bg-[#1E1F22] text-gray-300 text-xs rounded p-2.5 outline-none flex-1 border border-gray-800"
                 />
                 <button

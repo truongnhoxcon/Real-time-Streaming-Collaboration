@@ -71,6 +71,11 @@ variable "twilio_secret_arn" {
   type        = string
 }
 
+variable "google_oauth_secret_arn" {
+  description = "ARN of the Secrets Manager secret that holds Google OAuth 2.0 credentials (google-oauth). Injected into core-backend as GOOGLE_CLIENT_ID and GOOGLE_CLIENT_SECRET."
+  type        = string
+}
+
 # ─── Frontend additions ───────────────────────────────────────────────────────
 
 variable "frontend_image" {

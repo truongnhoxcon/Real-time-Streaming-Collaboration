@@ -69,3 +69,17 @@ variable "alert_email" {
   description = "Email address that receives CloudWatch alarm notifications via SNS."
   type        = string
 }
+
+# ─────────────────────────────────────────────────────────────────────────────
+# GitHub Actions OIDC
+# ─────────────────────────────────────────────────────────────────────────────
+
+variable "github_org" {
+  description = "GitHub organisation (or username) that owns the repository. Used to scope the OIDC trust policy for the GitHub Actions IAM role."
+  type        = string
+}
+
+variable "github_repo" {
+  description = "GitHub repository name (without org prefix). Used to scope the OIDC trust policy for the GitHub Actions IAM role."
+  type        = string
+}

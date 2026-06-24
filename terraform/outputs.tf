@@ -58,3 +58,9 @@ output "realtime_backend_ecr_url" {
   description = "ECR repository URL for the realtime-backend image."
   value       = module.ecs.realtime_backend_ecr_repository_url
 }
+
+# GitHub Actions
+output "github_actions_role_arn" {
+  description = "ARN of the GitHub Actions OIDC IAM role. Copy this value into the AWS_GITHUB_ACTIONS_ROLE_ARN GitHub Secret."
+  value       = module.iam.github_actions_role_arn
+}

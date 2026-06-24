@@ -41,6 +41,18 @@ output "twilio_credentials_secret_name" {
   value       = aws_secretsmanager_secret.twilio_credentials.name
 }
 
+# ── google-oauth ──────────────────────────────────────────────────────────────
+
+output "google_oauth_secret_arn" {
+  description = "ARN of the google-oauth Secrets Manager secret. Pass to IAM policies and ECS task definitions."
+  value       = aws_secretsmanager_secret.google_oauth.arn
+}
+
+output "google_oauth_secret_name" {
+  description = "Name of the google-oauth Secrets Manager secret."
+  value       = aws_secretsmanager_secret.google_oauth.name
+}
+
 # ── redis-auth-token ──────────────────────────────────────────────────────────
 
 output "redis_auth_token_secret_arn" {
