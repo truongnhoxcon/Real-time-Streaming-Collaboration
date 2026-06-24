@@ -1,19 +1,5 @@
 # ─────────────────────────────────────────────────────────────────────────────
 # Deploy Workflow – Production deployment on merge to `main`
-#
-# Pipeline stages (sequential):
-#   1. build-and-push   – Build 3 Docker images and push to ECR
-#   2. terraform-apply  – terraform apply -auto-approve to sync infra
-#   3. ecs-deploy       – Force new ECS task deployments (rolling update)
-#
-# Authentication: AWS OIDC only.  No long-lived access keys are used.
-#
-# Required GitHub Secrets:
-#   AWS_GITHUB_ACTIONS_ROLE_ARN  – ARN of the IAM role created by terraform
-#                                  module "iam" (create_github_actions_role=true)
-#   AWS_REGION                   – e.g. us-east-1
-#   AWS_ACCOUNT_ID               – 12-digit AWS account ID
-#   ALERT_EMAIL                  – email for SNS alerts (terraform variable)
 # ─────────────────────────────────────────────────────────────────────────────
 
 name: Deploy
@@ -23,7 +9,6 @@ on:
     branches:
       - main
 
-# Only one deploy runs at a time; subsequent pushes queue, not cancel.
 concurrency:
   group: deploy-production
   cancel-in-progress: false
@@ -33,12 +18,12 @@ env:
   TF_VERSION: "1.8.5"
   AWS_REGION: ${{ secrets.AWS_REGION }}
 
-  # ECR repository names (must match deploy-ecr.sh / ECR module)
-  ECR_REPO_FRONTEND: antigroup-frontend
-  ECR_REPO_CORE: antigroup-core
-  ECR_REPO_REALTIME: antigroup-realtime
+  # ECR repository names (ĐÃ SỬA CHUẨN THEO TERRAFORM)
+  ECR_REPO_FRONTEND: frontend
+  ECR_REPO_CORE: core-backend
+  ECR_REPO_REALTIME: realtime-backend
 
-  # ECS names derived from project_name = "realtime-collab"
+  # ECS names
   ECS_CLUSTER: realtime-collab-cluster
   ECS_SERVICE_FRONTEND: realtime-collab-frontend-service
   ECS_SERVICE_CORE: realtime-collab-core-backend-service
@@ -53,7 +38,6 @@ jobs:
       id-token: write
       contents: read
 
-    # Expose image tags to downstream jobs
     outputs:
       image_tag: ${{ steps.meta.outputs.image_tag }}
 
@@ -61,12 +45,10 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
 
-      # ── Compute a deterministic image tag from short SHA ──────────────────
       - name: Compute image tag
         id: meta
         run: echo "image_tag=sha-$(git rev-parse --short HEAD)" >> "$GITHUB_OUTPUT"
 
-      # ── Node caches (parallel install later if needed in pre-build steps) ─
       - name: Cache frontend node_modules
         uses: actions/cache@v4
         with:
@@ -88,69 +70,58 @@ jobs:
           key: backend-realtime-${{ hashFiles('apps/backend-realtime/package-lock.json') }}
           restore-keys: backend-realtime-
 
-      # ── AWS authentication via OIDC ───────────────────────────────────────
       - name: Configure AWS credentials (OIDC)
         uses: aws-actions/configure-aws-credentials@v4
         with:
           role-to-assume: ${{ secrets.AWS_GITHUB_ACTIONS_ROLE_ARN }}
           aws-region: ${{ env.AWS_REGION }}
 
-      # ── ECR login ─────────────────────────────────────────────────────────
       - name: Login to Amazon ECR
         id: ecr-login
         uses: aws-actions/amazon-ecr-login@v2
 
-      # ── Build, Tag, Push – Frontend ───────────────────────────────────────
       - name: Build & push Frontend image
         env:
           REGISTRY: ${{ steps.ecr-login.outputs.registry }}
           IMAGE_TAG: ${{ steps.meta.outputs.image_tag }}
         run: |
           IMAGE_URI="$REGISTRY/$ECR_REPO_FRONTEND"
-
           docker build \
             --tag "$IMAGE_URI:$IMAGE_TAG" \
             --tag "$IMAGE_URI:latest" \
             --cache-from "$IMAGE_URI:latest" \
             --build-arg BUILDKIT_INLINE_CACHE=1 \
             apps/frontend
-
           docker push "$IMAGE_URI:$IMAGE_TAG"
           docker push "$IMAGE_URI:latest"
 
-      # ── Build, Tag, Push – Core Backend ───────────────────────────────────
       - name: Build & push Core Backend image
         env:
           REGISTRY: ${{ steps.ecr-login.outputs.registry }}
           IMAGE_TAG: ${{ steps.meta.outputs.image_tag }}
         run: |
           IMAGE_URI="$REGISTRY/$ECR_REPO_CORE"
-
           docker build \
             --tag "$IMAGE_URI:$IMAGE_TAG" \
             --tag "$IMAGE_URI:latest" \
             --cache-from "$IMAGE_URI:latest" \
             --build-arg BUILDKIT_INLINE_CACHE=1 \
             apps/backend-core
-
           docker push "$IMAGE_URI:$IMAGE_TAG"
           docker push "$IMAGE_URI:latest"
 
-      # ── Build, Tag, Push – Realtime Backend ───────────────────────────────
       - name: Build & push Realtime Backend image
         env:
           REGISTRY: ${{ steps.ecr-login.outputs.registry }}
           IMAGE_TAG: ${{ steps.meta.outputs.image_tag }}
         run: |
           IMAGE_URI="$REGISTRY/$ECR_REPO_REALTIME"
-
           docker build \
             --tag "$IMAGE_URI:$IMAGE_TAG" \
             --tag "$IMAGE_URI:latest" \
             --cache-from "$IMAGE_URI:latest" \
             --build-arg BUILDKIT_INLINE_CACHE=1 \
             apps/backend-realtime
-
           docker push "$IMAGE_URI:$IMAGE_TAG"
           docker push "$IMAGE_URI:latest"
 
@@ -176,13 +147,6 @@ jobs:
         with:
           terraform_version: ${{ env.TF_VERSION }}
 
-      - name: Cache Terraform providers
-        uses: actions/cache@v4
-        with:
-          path: terraform/.terraform
-          key: terraform-${{ hashFiles('terraform/.terraform.lock.hcl') }}
-          restore-keys: terraform-
-
       - name: Configure AWS credentials (OIDC)
         uses: aws-actions/configure-aws-credentials@v4
         with:
@@ -192,6 +156,7 @@ jobs:
       - name: Terraform Init
         run: terraform init -input=false
 
+      # ĐÃ BỔ SUNG ĐẦY ĐỦ CÁC BIẾN VÀ TAG LATEST
       - name: Terraform Plan
         id: plan
         run: |
@@ -202,9 +167,9 @@ jobs:
             -var="github_repo=Real-time-Streaming-Collaboration" \
             -var="account_id=${{ secrets.AWS_ACCOUNT_ID }}" \
             -var="alert_email=${{ secrets.ALERT_EMAIL }}" \
-            -var="frontend_image=${{ secrets.AWS_ACCOUNT_ID }}.dkr.ecr.${{ env.AWS_REGION }}.amazonaws.com/${{ env.ECR_REPO_FRONTEND }}:${{ needs.build-and-push.outputs.image_tag }}" \
-            -var="core_backend_image=${{ secrets.AWS_ACCOUNT_ID }}.dkr.ecr.${{ env.AWS_REGION }}.amazonaws.com/${{ env.ECR_REPO_CORE }}:${{ needs.build-and-push.outputs.image_tag }}" \
-            -var="realtime_backend_image=${{ secrets.AWS_ACCOUNT_ID }}.dkr.ecr.${{ env.AWS_REGION }}.amazonaws.com/${{ env.ECR_REPO_REALTIME }}:${{ needs.build-and-push.outputs.image_tag }}" \
+            -var="frontend_image=${{ secrets.AWS_ACCOUNT_ID }}.dkr.ecr.${{ env.AWS_REGION }}.amazonaws.com/${{ env.ECR_REPO_FRONTEND }}:latest" \
+            -var="core_backend_image=${{ secrets.AWS_ACCOUNT_ID }}.dkr.ecr.${{ env.AWS_REGION }}.amazonaws.com/${{ env.ECR_REPO_CORE }}:latest" \
+            -var="realtime_backend_image=${{ secrets.AWS_ACCOUNT_ID }}.dkr.ecr.${{ env.AWS_REGION }}.amazonaws.com/${{ env.ECR_REPO_REALTIME }}:latest" \
             -no-color \
             -out=tfplan
 
@@ -226,10 +191,6 @@ jobs:
         with:
           role-to-assume: ${{ secrets.AWS_GITHUB_ACTIONS_ROLE_ARN }}
           aws-region: ${{ env.AWS_REGION }}
-
-      # Force new deployments so ECS pulls the freshly pushed :sha-* images.
-      # deployment_circuit_breaker + rollback=true in Terraform ensures that
-      # if the new tasks fail health checks, ECS automatically reverts.
 
       - name: Force new deployment – Frontend
         run: |
@@ -255,8 +216,6 @@ jobs:
             --force-new-deployment \
             --no-cli-pager
 
-      # Wait until all 3 services reach steady state before marking the
-      # workflow as succeeded. Timeout = 10 min per service.
       - name: Wait – Frontend steady state
         run: |
           aws ecs wait services-stable \
@@ -279,4 +238,3 @@ jobs:
         run: |
           echo "✅ All ECS services are stable."
           echo "   Cluster  : $ECS_CLUSTER"
-          echo "   Image tag: ${{ needs.build-and-push.outputs.image_tag }}"
