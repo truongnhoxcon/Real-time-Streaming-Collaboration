@@ -332,3 +332,69 @@ resource "aws_iam_role_policy_attachment" "github_actions_ci" {
   role       = aws_iam_role.github_actions[0].name
   policy_arn = aws_iam_policy.github_actions_ci[0].arn
 }
+
+# ─────────────────────────────────────────────────────────────────────────────
+# GitHub Actions – Terraform remote backend access
+#
+# Grants the CI role the minimum permissions required to:
+#   • terraform init   – read/write state object, acquire/release DynamoDB lock
+#   • terraform plan   – read state object, check lock
+#   • terraform apply  – write updated state object, conditional lock operations
+#
+# S3 permissions are split across two statements because ListBucket targets
+# the bucket ARN itself while object operations target ARN/key paths.
+# ─────────────────────────────────────────────────────────────────────────────
+
+resource "aws_iam_policy" "github_actions_terraform_state" {
+  count = var.create_github_actions_role ? 1 : 0
+
+  name        = "${var.project_name}-${var.environment}-github-actions-tf-state"
+  description = "Allows GitHub Actions to read/write Terraform remote state in S3 and acquire DynamoDB state locks."
+
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Sid    = "TerraformStateS3List"
+        Effect = "Allow"
+        Action = ["s3:ListBucket"]
+        Resource = [
+          "arn:aws:s3:::realtime-collab-terraform-state-${var.account_id}"
+        ]
+      },
+      {
+        Sid    = "TerraformStateS3Objects"
+        Effect = "Allow"
+        Action = [
+          "s3:GetObject",
+          "s3:PutObject",
+          "s3:DeleteObject",
+        ]
+        Resource = [
+          "arn:aws:s3:::realtime-collab-terraform-state-${var.account_id}/*"
+        ]
+      },
+      {
+        Sid    = "TerraformStateDynamoDBLock"
+        Effect = "Allow"
+        Action = [
+          "dynamodb:GetItem",
+          "dynamodb:PutItem",
+          "dynamodb:DeleteItem",
+        ]
+        Resource = [
+          "arn:aws:dynamodb:${var.aws_region}:${var.account_id}:table/realtime-collab-terraform-locks"
+        ]
+      }
+    ]
+  })
+
+  tags = local.common_tags
+}
+
+resource "aws_iam_role_policy_attachment" "github_actions_terraform_state" {
+  count = var.create_github_actions_role ? 1 : 0
+
+  role       = aws_iam_role.github_actions[0].name
+  policy_arn = aws_iam_policy.github_actions_terraform_state[0].arn
+}

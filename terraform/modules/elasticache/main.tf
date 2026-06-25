@@ -30,8 +30,8 @@ data "aws_secretsmanager_secret_version" "redis_auth" {
 }
 
 locals {
-  # The secret is stored as JSON: {"token":"..."}
-  redis_auth_token = jsondecode(data.aws_secretsmanager_secret_version.redis_auth.secret_string)["token"]
+  # The secret is now stored as a plain text string (not JSON).
+  redis_auth_token = data.aws_secretsmanager_secret_version.redis_auth.secret_string
 }
 
 # ─────────────────────────────────────────────────────────────────────────────

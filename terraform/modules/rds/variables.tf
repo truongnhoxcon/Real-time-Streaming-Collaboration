@@ -45,7 +45,7 @@ variable "rds_sg_id" {
 # ─────────────────────────────────────────────────────────────────────────────
 
 variable "db_password_secret_arn" {
-  description = "ARN of the Secrets Manager secret that contains the RDS master password JSON ({\"username\":\"...\",\"password\":\"...\"})."
+  description = "ARN of the Secrets Manager secret that contains the RDS master password as a plain text string."
   type        = string
 }
 

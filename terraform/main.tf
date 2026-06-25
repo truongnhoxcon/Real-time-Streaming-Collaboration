@@ -81,6 +81,7 @@ module "iam" {
   project_name            = var.project_name
   environment             = var.environment
   aws_region              = var.aws_region
+  account_id              = var.account_id
   s3_bucket_arn           = module.s3.files_bucket_arn
   db_password_secret_arn  = module.secrets.db_password_secret_arn
   jwt_secret_arn          = module.secrets.jwt_secret_arn

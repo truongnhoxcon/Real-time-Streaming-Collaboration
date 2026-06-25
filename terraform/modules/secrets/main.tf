@@ -168,11 +168,9 @@ resource "aws_secretsmanager_secret" "redis_auth_token" {
 resource "aws_secretsmanager_secret_version" "redis_auth_token" {
   secret_id = aws_secretsmanager_secret.redis_auth_token.id
 
-  # Store the generated token as JSON so the elasticache module can decode it
-  # with: jsondecode(...)["token"]
-  secret_string = jsonencode({
-    token = random_password.redis_auth_token.result
-  })
+  # Store the generated token as a plain text string so modules can consume
+  # it directly via secret_string without jsondecode().
+  secret_string = random_password.redis_auth_token.result
 
   # Once set, do not overwrite if the secret is rotated manually outside Terraform
   lifecycle {

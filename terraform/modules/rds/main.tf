@@ -31,8 +31,8 @@ data "aws_secretsmanager_secret_version" "db_password" {
 }
 
 locals {
-  # The secret is stored as JSON: {"username":"postgres","password":"..."}
-  db_credentials = jsondecode(data.aws_secretsmanager_secret_version.db_password.secret_string)
+  # The secret is now stored as a plain text string (not JSON).
+  db_password = data.aws_secretsmanager_secret_version.db_password.secret_string
 }
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -140,7 +140,7 @@ resource "aws_db_instance" "main" {
 
   db_name  = "realtime_collab"
   username = "postgres"
-  password = local.db_credentials["password"] # pulled from Secrets Manager
+  password = local.db_password # pulled from Secrets Manager (plain text)
 
   # ── Parameter group (enforces SSL) ────────────────────────────────────────
 

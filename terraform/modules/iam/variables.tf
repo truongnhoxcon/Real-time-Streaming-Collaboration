@@ -82,3 +82,8 @@ variable "github_repo" {
   type        = string
   default     = ""
 }
+
+variable "account_id" {
+  description = "AWS account ID (12-digit). Used to construct ARNs for the Terraform state S3 bucket and DynamoDB lock table."
+  type        = string
+}
