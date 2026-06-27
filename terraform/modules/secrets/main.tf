@@ -23,7 +23,24 @@ locals {
 
 # ─────────────────────────────────────────────────────────────────────────────
 # 1. db-password – RDS PostgreSQL master credentials
+#
+# AWS RDS master password constraints:
+#   • Printable ASCII only
+#   • Must NOT contain /  @  "  or space
+#
+# A random_password resource generates a compliant password on first apply.
+# override_special excludes all four forbidden characters while keeping the
+# password strong. The password is stored as a plain text string so the RDS
+# module can consume it directly via secret_string without jsondecode().
 # ─────────────────────────────────────────────────────────────────────────────
+
+resource "random_password" "db_password" {
+  length  = 32
+  special = true
+
+  # Exclude the four characters forbidden by AWS RDS:  /  @  "  (space)
+  override_special = "!#$%&*()-_=+[]{}<>:?"
+}
 
 resource "aws_secretsmanager_secret" "db_password" {
   name        = "${local.name_prefix}/db-password"
@@ -45,15 +62,12 @@ resource "aws_secretsmanager_secret" "db_password" {
 resource "aws_secretsmanager_secret_version" "db_password" {
   secret_id = aws_secretsmanager_secret.db_password.id
 
-  # Placeholder – replace with real credentials before first use
-  secret_string = jsonencode({
-    username = "postgres"
-    password = "CHANGE_ME"
-  })
+  # Store as a plain text string so the RDS module can read secret_string
+  # directly without jsondecode() — matches how the RDS module consumes it.
+  secret_string = random_password.db_password.result
 
-  # Prevent Terraform from constantly re-applying the placeholder once the
-  # value has been updated outside of Terraform (e.g. via Secrets Manager
-  # rotation or manual update).
+  # Prevent Terraform from overwriting the secret if it is rotated manually
+  # outside of Terraform (e.g. via Secrets Manager rotation or AWS Console).
   lifecycle {
     ignore_changes = [secret_string]
   }
