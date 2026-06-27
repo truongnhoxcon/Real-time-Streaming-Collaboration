@@ -232,9 +232,14 @@ jobs:
 
       - name: Wait – Realtime Backend steady state
         run: |
+          # realtime-backend needs more time: Redis connect + Pub/Sub subscriber
+          # registration happen after the HTTP server is up. Poll for up to 20
+          # minutes (80 attempts × 15 s) to survive transient Redis delays.
           aws ecs wait services-stable \
             --cluster "$ECS_CLUSTER" \
-            --services "$ECS_SERVICE_REALTIME"
+            --services "$ECS_SERVICE_REALTIME" \
+            --cli-connect-timeout 20 \
+            --cli-read-timeout 900
 
       - name: Deployment complete
         run: |

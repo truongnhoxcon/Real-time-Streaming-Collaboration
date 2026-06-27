@@ -50,32 +50,42 @@ app.get('/ws/health', (req, res) => {
 
 /**
  * Connect to backing storage and start the HTTP server.
- * 
- * @param {number} port 
+ *
+ * IMPORTANT: server.listen() is called FIRST, before Redis connects, so the
+ * ALB health check on /health returns 200 immediately after the container
+ * starts. This prevents the task from being killed during the Redis connect
+ * phase and avoids the "ServicesStable Max attempts exceeded" failure.
+ *
+ * @param {number} port
  */
 async function startServer(port) {
+  // 1. Bind HTTP server immediately so /health is reachable from the moment
+  //    the container starts – ALB needs this to mark the target healthy.
+  await new Promise((resolve) => {
+    server.listen(port, '0.0.0.0', () => {
+      console.log(`Real-time WebSocket server is listening on 0.0.0.0:${port} (Path: /ws)`);
+      resolve();
+    });
+  });
+
   try {
-    // 1. Connect Redis clients
+    // 2. Connect Redis clients (after the port is open).
     console.log('Connecting to Redis...');
     await connectAll();
-    
-    // 2. Register Redis Pub/Sub event sync subscribers
+
+    // 3. Register Redis Pub/Sub event sync subscribers.
     registerRedisMessageSubscriber(io);
     registerRedisPresenceSubscriber(io);
-    
-    // 3. Start server – bind to 0.0.0.0 so the ALB and container network
-    //    can reach the process (binding to localhost/127.0.0.1 would block
-    //    any traffic originating from outside the container).
-    return new Promise((resolve) => {
-      server.listen(port, '0.0.0.0', () => {
-        console.log(`Real-time WebSocket server is listening on 0.0.0.0:${port} (Path: /ws)`);
-        resolve(server);
-      });
-    });
+
+    console.log('Redis connected – Pub/Sub subscribers registered.');
   } catch (err) {
-    console.error('Failed to initialize server resources:', err);
-    throw err;
+    // Redis failure must NOT crash the process: the HTTP server is already
+    // listening and the ALB target would go Draining if we exit here.
+    // Log the error and let the redis reconnectStrategy handle recovery.
+    console.error('Redis connection failed during startup – will retry automatically:', err.message);
   }
+
+  return server;
 }
 
 module.exports = {
