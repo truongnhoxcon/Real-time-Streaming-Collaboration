@@ -117,7 +117,8 @@ resource "aws_ecs_task_definition" "realtime_backend" {
         { name = "REDIS_HOST", value = var.redis_host },
         { name = "DB_HOST", value = var.db_host },
         { name = "AWS_REGION", value = var.aws_region },
-        { name = "DB_SSL", value = "true" }
+        { name = "DB_SSL", value = "true" },
+        { name = "REDIS_TLS", value = "true" }
       ]
 
       secrets = [
@@ -136,6 +137,10 @@ resource "aws_ecs_task_definition" "realtime_backend" {
         {
           name      = "TWILIO_AUTH_TOKEN"
           valueFrom = "${var.twilio_secret_arn}:authToken::"
+        },
+        {
+          name      = "REDIS_PASSWORD"
+          valueFrom = var.redis_auth_secret_arn
         }
       ]
 

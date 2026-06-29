@@ -172,6 +172,7 @@ module "ecs" {
   jwt_secret_arn          = module.secrets.jwt_secret_arn
   twilio_secret_arn       = module.secrets.twilio_credentials_secret_arn
   google_oauth_secret_arn = module.secrets.google_oauth_secret_arn
+  redis_auth_secret_arn   = module.secrets.redis_auth_token_secret_arn
 
   # Networking
   private_subnet_ids     = module.vpc.private_subnet_ids
