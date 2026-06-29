@@ -5,7 +5,7 @@ const redisOptions = {
   socket: {
     host: process.env.REDIS_HOST || 'localhost',
     port: parseInt(process.env.REDIS_PORT || '6379', 10),
-    tls: process.env.REDIS_TLS === 'true' ? {} : undefined,
+    tls: process.env.REDIS_TLS === 'true' ? { rejectUnauthorized: false } : undefined,
     reconnectStrategy: (retries) => {
       // Reconnect strategy: try again every 1 second, up to a maximum delay of 3 seconds
       return Math.min(retries * 1000, 3000);
